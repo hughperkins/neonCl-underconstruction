@@ -22,7 +22,7 @@ import numpy as np
 import pycuda.driver as drv
 import logging
 from pycuda.tools import context_dependent_memoize
-from pycuda.curandom import MRG32k3aRandomNumberGenerator as rng_mrg
+#from pycuda.curandom import MRG32k3aRandomNumberGenerator as rng_mrg
 from pycuda.gpuarray import GPUArray as p_gpuarray
 from struct import unpack_from
 from pytools import memoize_method
@@ -404,7 +404,6 @@ class NervanaGPU(Backend):
 
     # size of the RNG pool on device
     # currently this is hard wired
-    _RNG_POOL_SIZE = (3*2048*32, 1)
     def __init__(self,
 #                 rng_seed=None,
                  default_dtype=np.float32,
@@ -505,27 +504,7 @@ class NervanaGPU(Backend):
         """
         Execute the optree. Break optree into sub-optrees if necessary.
         """
-        from neon.backends.float_ew import call_compound_kernel
-
-        # get post order stack
-        stack = optree.traverse(list())
-
-        # bypass stage creation
-        if self._is_simple_stack(stack):
-            return call_compound_kernel(self._get_rand_state_dev(), self.compute_capability, *stack)
-
-        # create stages and evaluate
-        stacks = self._split_to_stacks(optree)
-
-        for stack in stacks:
-            if (len(stack) == 5 and isinstance(stack[3], dict) and
-                    stack[3]['op'] == 'dot'):
-                # evaluate the simple dot
-                self.compound_dot(stack[1], stack[2], stack[0])
-            else:
-                call_compound_kernel(self._get_rand_state_dev(), self.compute_capability, *stack)
-
-        return stacks[-1][0]  # TODO: to be removed, used in partial
+        raise Exception('not implemented')
 
     def empty(self, shape, dtype=None, name=None, persist_values=True,
               parallel=False, distributed=False, allocator=drv.mem_alloc):
