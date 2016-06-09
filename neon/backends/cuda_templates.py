@@ -61,99 +61,11 @@ __global__ void %(name)s (
 """
 
 
-_stage_template = {
-    "loop": r"""
-
-    for (int i = tid; i < n{0}; i += THREADS)
-    {{
-        %(loads{0})s
-
-        %(ops{0})s
-    }}
-""",
-
-    "red32": r"""
-
-    #pragma unroll
-    for (int i = 16; i > 0; i >>= 1)
-    {{
-        %(shfl_red{0})s
-    }}
-
-""",
-
-    "red": r"""
-
-    sPartials[tid] = %(var_red{0})s;
-    __syncthreads();
-
-    #pragma unroll
-    for (int a = THREADS >> 1; a > 32; a >>= 1)
-    {{
-        if ( tid < a )
-            %(share1_red{0})s
-        __syncthreads();
-    }}
-
-    if ( tid < 32 )
-    {{
-        %(share2_red{0})s
-
-        // __syncthreads(); // Seems to prevent a race condition but causes other problems
-
-        #pragma unroll
-        for (int i = 16; i > 0; i >>= 1)
-            %(shfl_red{0})s
-
-        sPartials[tid] = %(var_red{0})s;
-    }}
-    __syncthreads();
-    %(var_red{0})s = sPartials[0];
-""",
-
-    "red_ops": r"""
-
-        %(ops{0})s
-""",
-
-    "red_out": r"""
-
-    if ( tid == 0 )
-    {{
-        %(ops{0})s
-    }}
-"""
-}
-
-
 _fin_template = r"""
     %(finish)s
 }
 """
 
-
-_init_rand_func = r"""
-    unsigned lfsr0, lfsr1, lfsr2;
-    unsigned idx = bid * THREADS + tid;
-    rand_state += idx % RAND_POOL_SIZE;
-    lfsr0 = *(rand_state + 0*RAND_POOL_SIZE);
-    lfsr1 = *(rand_state + 1*RAND_POOL_SIZE);
-    lfsr2 = *(rand_state + 2*RAND_POOL_SIZE);
-"""
-
-
-_init_rand_round_func = r"""
-    int i_rand_scale = (127 - 32 - mantissa_bits) << 23;
-    float rand_scale = *(float*)&i_rand_scale;
-    unsigned rand_mask = 0xffffffff << (23 - mantissa_bits);
-"""
-
-
-_finish_rand_func = r"""
-    *(rand_state + 0*RAND_POOL_SIZE) = lfsr0;
-    *(rand_state + 1*RAND_POOL_SIZE) = lfsr1;
-    *(rand_state + 2*RAND_POOL_SIZE) = lfsr2;
-"""
 
 _common_kepler = r"""
 #define __ldg(x) (*(x))
@@ -166,19 +78,6 @@ __device__ unsigned urand_gen(unsigned& lfsr0, unsigned& lfsr1, unsigned& lfsr2)
     lfsr1 = ((lfsr1 & 0xfffffff8) <<  4) ^ (((lfsr1 << 2)  ^ lfsr1) >> 25);
     lfsr2 = ((lfsr2 & 0xfffffff0) << 11) ^ (((lfsr2 << 3)  ^ lfsr2) >> 11);
     return lfsr0 ^ lfsr1 ^ lfsr2;
-}
-"""
-
-
-_common_frand = r"""
-__device__ __forceinline__ float frand(unsigned& lfsr0, unsigned& lfsr1, unsigned& lfsr2)
-{
-    unsigned urand = urand_gen(lfsr0, lfsr1, lfsr2);
-    float val;
-    asm("cvt.rn.f32.u32 %0, %1;\n\t"
-        "mul.f32 %0, %0, 0F2f800000;"
-        : "=f"(val) : "r"(urand));
-    return val;
 }
 """
 
@@ -368,18 +267,6 @@ __device__ __forceinline__ float fp16_to_fp32(unsigned short val)
 }
 """
 
-_common_max_abs = r"""
-__device__ __forceinline__ float max_abs(int max_abs, int val)
-{
-    asm("{\n\t"
-        ".reg .s32 abs_val;\n\t"
-        "abs.s32 abs_val, %1;\n\t"
-        "max.s32 %0, %0, abs_val;\n\t"
-        "}" : "+r"(max_abs) : "r"(val));
-    return max_abs;
-}
-"""
-
 _ew_types = {
     "f4": {
         "type": "float",
@@ -392,43 +279,7 @@ _ew_types = {
         "type4": "ushort4",
         "cvt": "fp16_to_fp32",
         "cvt_out": "fp32_to_fp16",
-    },
-    "i4": {
-        "type": "int",
-        "cvt": "(float)",
-    },
-    "u4": {
-        "type": "unsigned int",
-        "cvt": "(float)",
-    },
-    "i2": {
-        "type": "short",
-        "cvt": "(float)",
-    },
-    "u2": {
-        "type": "unsigned short",
-        "cvt": "(float)",
-    },
-    "i1": {
-        "type": "char",
-        "cvt": "(float)",
-    },
-    "u1": {
-        "type": "unsigned char",
-        "cvt": "(float)",
-    },
-    "x4": {
-        "type": "int",
-        "cvt": "scale{0} * (float)",
-    },
-    "x2": {
-        "type": "short",
-        "cvt": "scale{0} * (float)",
-    },
-    "x1": {
-        "type": "char",
-        "cvt": "scale{0} * (float)",
-    },
+    }
 }
 
 
@@ -478,49 +329,8 @@ _ew_strings = {
         "output": "*(a_out + __ldg(take_out)) = {0};\n        take_out += THREADS;",
 
     },
-    "onehot0": {
-        "arguments": "const int* onehot{0}_in",
-        "inits": "onehot{0}_in += tid;",
-        "loads": "int onehot{0} = __ldg(onehot{0}_in);\n"
-        "        onehot{0}_in += THREADS;",
-    },
-    "onehot1": {
-        "arguments": "const int* onehot{0}_in",
-        "inits": "int onehot{0} = __ldg(onehot{0}_in + bid);\n",
-        "loads": "",
-    },
     "const": {
         "arguments": "float c{0}",
-    },
-    "round": {
-        "random": {
-            "f4": """float {0}          = fp32_to_fp32_rand({1}, lfsr0, lfsr1,
-                                                            lfsr2, rand_scale, rand_mask);""",
-            "f2": """unsigned short {0} = fp32_to_fp16_rand({1}, lfsr0, lfsr1,
-                                                            lfsr2, rand_scale, rand_mask);""",
-            "u4": "unsigned int {0}     = fp32_to_uint32({1});",
-            "u2": "unsigned short {0}   = fp32_to_uint16({1});",
-            "u1": "unsigned char {0}    = fp32_to_uint8({1});",
-            "i4": "int {0}              = fp32_to_int32_rand({1}, lfsr0, lfsr1, lfsr2);",
-            "i2": "short {0}            = fp32_to_int16_rand({1}, lfsr0, lfsr1, lfsr2);",
-            "i1": "char {0}             = fp32_to_int8_rand( {1}, lfsr0, lfsr1, lfsr2);",
-            "x4": "int {0}              = fp32_to_int32_rand({1}, lfsr0, lfsr1, lfsr2);",
-            "x2": "short {0}            = fp32_to_int16_rand({1}, lfsr0, lfsr1, lfsr2);",
-            "x1": "char {0}             = fp32_to_int8_rand( {1}, lfsr0, lfsr1, lfsr2);",
-        },
-        "nearest": {
-            "f2": "unsigned short {0}   = fp32_to_fp16({1});",
-            "u4": "unsigned int {0}     = fp32_to_uint32({1});",
-            "u2": "unsigned short {0}   = fp32_to_uint16({1});",
-            "u1": "unsigned char {0}    = fp32_to_uint8({1});",
-            "i4": "int {0}              = fp32_to_int32({1});",
-            "i2": "short {0}            = fp32_to_int16({1});",
-            "i1": "char {0}             = fp32_to_int8({1});",
-            "x4": "int {0}              = fp32_to_int32({1});",
-            "x2": "short {0}            = fp32_to_int16({1});",
-            "x1": "char {0}             = fp32_to_int8({1});",
-
-        },
     },
 }
 
@@ -534,77 +344,3 @@ asm("{{\n\t"
     "}}" : "=f"({0}) : "f"({1}));
 """
 
-
-# Note: binary operands come off the stack in reverse order
-_float_ops = {
-    "assign": (2, "unused"),
-    "add": (2, 'float {0} = {2} + {1};'),
-    "sub": (2, 'float {0} = {2} - {1};'),
-    "mul": (2, 'float {0} = {2} * {1};'),
-    "div": (2, 'float {0} = {2} / {1};'),
-    "eq": (2, "float {0} = {2} == {1};"),
-    "ne": (2, "float {0} = {2} != {1};"),
-    "lt": (2, "float {0} = {2} <  {1};"),
-    "le": (2, "float {0} = {2} <= {1};"),
-    "gt": (2, "float {0} = {2} >  {1};"),
-    "ge": (2, "float {0} = {2} >= {1};"),
-    "minimum": (2, "float {0} = fminf({2},{1});"),
-    "maximum": (2, "float {0} = fmaxf({2},{1});"),
-    "pow": (2, "float {0} = powf({2},{1});"),
-    "finite": (1, _is_finite),
-    "neg": (1, "float {0} = -{1};"),
-    "abs": (1, "float {0} = abs({1});"),
-    "sgn": (1, "float {0} = ({1} == 0.0f) ? (0.0f) : (copysignf(1.0f, {1}));"),
-    "sqrt": (1, "float {0} = sqrtf({1});"),
-    "sqr": (1, "float {0} = {1} * {1};"),
-    "exp": (1, "float {0} = expf({1});"),
-    "log": (1, "float {0} = logf({1});"),
-    "safelog": (1, "float {0} = ({1} > 0.0f) ? logf({1}) : -50.0f;"),
-    "exp2": (1, "float {0} = exp2f({1});"),
-    "log2": (1, "float {0} = log2f({1});"),
-    "sig": (1, "float {0} = 1.0f/(1.0f + expf(-{1}));"),
-    "sig2": (1, "float {0} = 1.0f/(1.0f + exp2f(-{1}));"),
-    "tanh": (1, "float {0} = tanhf({1});"),
-    "tanh2": (1, "float {0} = (exp2f(2.0f*{1}) - 1.0f) / (exp2f(2.0f*{1}) + 1.0f);"),
-    "rand": (0, "float {0} = frand(lfsr0, lfsr1, lfsr2);"),
-    "onehot": (0, "float {0} = {1} == {2};"),
-}
-
-
-_reduction_ops = {
-    "sum": {
-        "inits": "float {0} = 0.0f;",
-        "ops": "{0} += {1};",
-        "shfl_red": "{0} += __shfl_xor({0}, i);",
-        "share1_red": "sPartials[tid] += sPartials[tid + a];",
-        "share2_red": "{0} = sPartials[tid] + sPartials[tid + 32];",
-    },
-    "max": {
-        "inits": "float {0} = -FLT_MAX;",
-        "ops": "{0} = fmaxf({0}, {1});",
-        "shfl_red": "{0} = fmaxf({0}, __shfl_xor({0}, i));",
-        "share1_red": "sPartials[tid] = fmaxf(sPartials[tid], sPartials[tid + a]);",
-        "share2_red": "{0} = fmaxf(sPartials[tid], sPartials[tid + 32]);",
-    },
-    "min": {
-        "inits": "float {0} = FLT_MAX;",
-        "ops": "{0} = fminf({0}, {1});",
-        "shfl_red": "{0} = fminf({0}, __shfl_xor({0}, i));",
-        "share1_red": "sPartials[tid] = fminf(sPartials[tid], sPartials[tid + a]);",
-        "share2_red": "{0} = fminf(sPartials[tid], sPartials[tid + 32]);",
-    },
-    "argmax": {
-        "inits": "int {0} = -1; float max = -FLT_MAX;",
-        "ops": "if ({1} > max) {{ max = {1}; {0} = i; }}",
-        "shfl_red": "float max2 = __shfl_xor(max, i); int argMax2 = __shfl_xor({0}, i);\n"
-        "        if (max2 > max) {{ max = max2; {0} = argMax2; }}"
-        "        else if (max2 == max && argMax2 < {0}) {{ {0} = argMax2; }}",
-    },
-    "argmin": {
-        "inits": "int {0} = -1; float min = FLT_MAX;",
-        "ops": "if ({1} < min) {{ min = {1}; {0} = i; }}",
-        "shfl_red": "float min2 = __shfl_xor(min, i); int argMin2 = __shfl_xor({0}, i);\n"
-        "        if (min2 < min) {{ min = min2; {0} = argMin2; }}"
-        "        else if (min2 == min && argMin2 < {0}) {{ {0} = argMin2; }}",
-    },
-}
