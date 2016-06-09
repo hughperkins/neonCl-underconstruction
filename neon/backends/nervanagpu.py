@@ -747,6 +747,9 @@ class NervanaGPU(Backend):
                         "info@nervanasys.com")
         else:
             self.use_cudac_kernels = False
+        self.compute_capability = (4,0)
+        self.use_cudac_kernels = True
+        self.cublas_handle = cublas.cublasCreate()
 
         self.enable_winograd = enable_winograd
         self.cache_dir = cache_dir

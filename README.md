@@ -1,3 +1,8 @@
+# this branch
+
+- compared to master etc, this only will contain convolution, no other layers
+- also, will be Kepler kernels only, no SASS
+
 # neon
 
 [neon](https://github.com/NervanaSystems/neon) is Nervana's Python based
