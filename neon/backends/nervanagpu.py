@@ -30,7 +30,7 @@ from functools import wraps
 from math import log
 
 from neon.backends import kernel_specs
-from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
+from neon.backends.backend import Tensor, Backend, OpCollection
 from neon.backends.layer_gpu import ConvLayer, _get_sm_count
 #from neon.backends.kernels.cuda import pooling, roipooling
 from scikits.cuda import cublas
@@ -359,8 +359,8 @@ class GPUTensor(Tensor):
                 OpTreeNode.build("assign", self, value)
 
         # collapse and execute an op tree as a kernel
-        elif isinstance(value, OpTreeNode):
-            OpTreeNode.build("assign", self, value)
+#        elif isinstance(value, OpTreeNode):
+#            OpTreeNode.build("assign", self, value)
 
         # assign to numpy array (same as set())
         elif isinstance(value, np.ndarray):

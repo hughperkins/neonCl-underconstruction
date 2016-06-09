@@ -24,7 +24,7 @@ import numpy as np
 from math import ceil
 
 from neon import NervanaObject
-from neon.backends.autodiff import Autodiff
+#from neon.backends.autodiff import Autodiff
 from neon.backends.util.check_gpu import get_device_count
 
 
