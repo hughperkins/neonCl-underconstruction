@@ -112,61 +112,8 @@ class Layer(object):
     def bprop(self, bprop_in, beta=0):
         return bprop_in
 
-    # fprop relu happens inside of the conv and gemm kernels
-    def bprop_relu(self, bprop_in):
-
-        bprop_in[:] = bprop_in * (self.fprop_out > 0)
-        return bprop_in
-
     def grad_descent(self):
-
         self.weights[:] += self.updat_out*self.learning_rate
-
-    def get_activation_mean(self):
-        return self._get_mean(self.fprop_out, self.act_stats, self.dimO2)
-
-    def get_activation_max(self):
-        return self._get_max(self.fprop_out, self.act_stats, self.dimO2)
-
-    def get_delta_mean(self):
-        return self._get_mean(self.bprop_out, self.delta_stats, self.dimI2)
-
-    def get_delta_max(self):
-        return self._get_max(self.bprop_out, self.delta_stats, self.dimI2)
-
-    def get_update_mean(self):
-        if self.sizeF > 0:
-            return self._get_mean(self.updat_out, self.weight_stats, self.dimF2)
-        return 0
-
-    def get_update_max(self):
-        if self.sizeF > 0:
-            return self._get_max(self.updat_out, self.weight_stats, self.dimF2)
-        return 0
-
-    def get_weight_mean(self):
-        if self.sizeF > 0:
-            return self._get_mean(self.weights, self.weight_stats, self.dimF2)
-        return 0
-
-    def get_weight_max(self):
-        if self.sizeF > 0:
-            return self._get_max(self.weights, self.weight_stats, self.dimF2)
-        return 0
-
-    def _get_mean(self, ary, buf, shape):
-
-        buf1    = buf[0:1, 0:1]
-        buf[:]  = self.lib.sum(abs(ary.reshape(shape)), axis=1)
-        buf1[:] = self.lib.sum(buf, axis=0) * (1.0/ary.size)
-        return float(buf1.get()[0, 0])
-
-    def _get_max(self, ary, buf, shape):
-
-        buf1    = buf[0:1, 0:1]
-        buf[:]  = self.lib.max(abs(ary.reshape(shape)), axis=1)
-        buf1[:] = self.lib.max(buf, axis=0)
-        return float(buf1.get()[0, 0])
 
     def fprop_stats(self):
         print("fprop:%10.5f mean %11.5f max %s"
@@ -312,7 +259,7 @@ class ConvLayer(Layer):
 
         ####### Cuda C ###########
         if lib.use_cudac_kernels:
-
+            print('cudac')
             #3D conv not supported yet
             if T > 1 or D > 1:
                 raise ValueError("3D Convolution not supported by CUDA C kernels.")
@@ -327,72 +274,6 @@ class ConvLayer(Layer):
                                                        pad_d, pad_h, pad_w, str_d, str_h, str_w, bsum=bsum)
             self.updat_kernels = convolution.UpdateCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                                                         pad_d, pad_h, pad_w, str_d, str_h, str_w)
-
-        ####### Winograd ###########
-        elif lib.enable_winograd and R == 3 and S == 3 and all(x == 1 for x in (D,M,T,str_w,str_h,str_d)):
-            from winograd_conv import (FpropWinograd, BpropWinograd, UpdateWinograd,
-                                       FpropWinograd_4x4_3x3, BpropWinograd_4x4_3x3, UpdateWinograd_3x3_4x4)
-
-            # Temp for now till we can autotune
-            # 2 is safer for fp16 without batchnorm
-            if (dtype == np.float32 and lib.enable_winograd != 2) or lib.enable_winograd == 4:
-                winograd = 4
-            else:
-                winograd = 2
-
-            if N >=64 and C < 8:
-                self.fprop_kernels = convolution.FpropDirect(
-                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                     pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
-            elif winograd == 4:
-                self.fprop_kernels = FpropWinograd_4x4_3x3(
-                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
-            else:
-                self.fprop_kernels = FpropWinograd(
-                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
-
-            if winograd == 4:
-                self.bprop_kernels = BpropWinograd_4x4_3x3(
-                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
-            else:
-                self.bprop_kernels = BpropWinograd(
-                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
-
-            if N >=32 and C < 8:
-                self.updat_kernels = convolution.UpdateDirect(
-                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                     pad_d, pad_h, pad_w, str_d, str_h, str_w)
-            elif winograd == 4:
-                self.updat_kernels = UpdateWinograd_3x3_4x4(
-                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w)
-            else:
-                self.updat_kernels = UpdateWinograd(
-                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w)
-
-        ####### Direct ###########
-        else:
-            vec_size = 4 if self.dtype.itemsize == 4 else 8
-
-            self.fprop_kernels = convolution.FpropDirect(
-                lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                 pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
-
-            if C % vec_size == 0:
-                self.bprop_kernels = convolution.BpropDirect(
-                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                     pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
-            else:
-                # special kernel for deconv into first layer
-                if relu or bsum:
-                    logger.warning("Small C bprop kernels do not support compound relu or bsum")
-
-                self.bprop_kernels = convolution.BpropDirectSmallC(
-                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                     pad_d, pad_h, pad_w, str_d, str_h, str_w)
-
-            self.updat_kernels = convolution.UpdateDirect(
-                lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                 pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
         logger.debug("%s: %s, %s, %s", str(self), str(self.fprop_kernels), str(self.bprop_kernels), str(self.updat_kernels))
 
