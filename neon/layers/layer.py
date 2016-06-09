@@ -18,7 +18,7 @@ import numpy as np
 from neon import NervanaObject
 #from neon.backends import Autodiff
 from neon.backends.backend import Tensor
-from neon.util.persist import load_class
+#from neon.util.persist import load_class
 
 
 logger = logging.getLogger(__name__)
