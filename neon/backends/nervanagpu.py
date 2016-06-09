@@ -733,20 +733,6 @@ class NervanaGPU(Backend):
         self.hist_base = drv.mem_alloc(self.hist_bins * self.hist_max * 4)
         drv.memset_d32(self.hist_base, 0, self.hist_bins * self.hist_max)
 
-        # Fall back to CUDA C kernels on older (pre-Maxwell) GPU generations
-        self.compute_capability = drv.Device(self.device_id).compute_capability()
-        if self.compute_capability[0] < 5:
-            self.use_cudac_kernels = True
-            self.cublas_handle = cublas.cublasCreate()
-
-            logger.warn("Neon is highly optimized for Maxwell GPUs. Although "
-                        "you might get speedups over CPUs, note that you are "
-                        "running on a pre-Maxwell GPU and you might not "
-                        "experience the fastest performance. For faster "
-                        "performance using the Nervana Cloud contact "
-                        "info@nervanasys.com")
-        else:
-            self.use_cudac_kernels = False
         self.compute_capability = (4,0)
         self.use_cudac_kernels = True
         self.cublas_handle = cublas.cublasCreate()
