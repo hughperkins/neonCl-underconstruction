@@ -21,7 +21,7 @@ TODO: remove any non-param caching code, neon layers should replace benchmark co
 import logging
 import numpy as np
 import pycuda.driver as drv
-from neon.backends import kernel_specs
+#from neon.backends import kernel_specs
 from neon.backends import convolution
 from pycuda.tools import context_dependent_memoize
 from operator import mul

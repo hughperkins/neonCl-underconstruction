@@ -19,7 +19,7 @@ import numpy as np
 import pycuda.driver as drv
 from pycuda.compiler import SourceModule
 from pycuda.tools import context_dependent_memoize
-from neon.backends import kernel_specs
+#from neon.backends import kernel_specs
 from neon.backends.cuda_templates import _common_round, _ew_types
 from math import ceil
 from operator import mul
