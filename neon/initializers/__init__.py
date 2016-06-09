@@ -12,12 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from neon.initializers.initializer import (Array,
-                                           Constant,
-                                           Gaussian,
-                                           GlorotUniform,
-                                           IdentityInit,
-                                           Kaiming,
-                                           Orthonormal,
-                                           Uniform,
-                                           Xavier)
+from neon.initializers.initializer import (Gaussian)
