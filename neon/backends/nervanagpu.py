@@ -29,11 +29,8 @@ from pytools import memoize_method
 from functools import wraps
 from math import log
 
-#from neon.backends import kernel_specs
 from neon.backends.backend import Tensor, Backend
 from neon.backends.layer_gpu import ConvLayer, _get_sm_count
-#from neon.backends.kernels.cuda import pooling, roipooling
-from scikits.cuda import cublas
 
 _none_slice = slice(None, None, None)
 
@@ -385,38 +382,6 @@ class GPUTensor(Tensor):
         return not self.take_array and self.strides == _contiguous_strides(self.shape)
 
 
-def memoize_stacks(func):
-    """
-    memoize the stacks using intrinsic_key_maps
-    """
-    cache = {}
-
-    @wraps(func)
-    def memoizer(be, optree):
-        optree_key, tensor_index_map, index_tensor_map = optree.intrinsic_key_maps()
-        # make sure it's the same backend
-        optree_key = (optree_key, id(be))
-        if optree_key in cache:
-            # replace tensors
-            stacks, cached_tensor_index_map = cache[optree_key]
-            for stack in stacks:
-                for i in range(len(stack)):
-                    if isinstance(stack[i], Tensor):
-                        if stack[i] in cached_tensor_index_map:
-                            stack[i] = index_tensor_map[
-                                cached_tensor_index_map[stack[i]]]
-            # update the cached_tensor_index_map
-            cache[optree_key] = (stacks, tensor_index_map)
-        else:
-            # cache stacks and tensor_index_map
-            # print ('created memoize stack')
-            stacks = func(be, optree)
-            cache[optree_key] = (stacks, tensor_index_map)
-        return stacks
-
-    return memoizer
-
-
 class NervanaGPU(Backend):
     """
     The primary interface class and factory for GPUTensors
@@ -441,7 +406,7 @@ class NervanaGPU(Backend):
     # currently this is hard wired
     _RNG_POOL_SIZE = (3*2048*32, 1)
     def __init__(self,
-                 rng_seed=None,
+#                 rng_seed=None,
                  default_dtype=np.float32,
                  stochastic_round=False,
                  deterministic=None,
@@ -477,8 +442,7 @@ class NervanaGPU(Backend):
         self.context_rand_state_alive = {}  # set whether randstate is fresh
 
         # super class init
-        super(NervanaGPU, self).__init__(rng_seed,
-                                         default_dtype,
+        super(NervanaGPU, self).__init__(default_dtype,
                                          compat_mode=compat_mode,
                                          deterministic=deterministic)
 
@@ -514,37 +478,11 @@ class NervanaGPU(Backend):
 
         self.compute_capability = (4,0)
         self.use_cudac_kernels = True
-        self.cublas_handle = cublas.cublasCreate()
 
         self.enable_winograd = enable_winograd
         self.cache_dir = cache_dir
         if not os.path.isdir(self.cache_dir):
             os.makedirs(self.cache_dir)
-
-    def scratch_buffer(self, size):
-
-        if size & 127 != 0:
-            size += 128 - (size & 127)
-
-        if size > self.scratch_size:
-            raise RuntimeError("nervanagpu.scratch_size(%d) is too small for this operation." % self.scratch_size)
-
-        self.scratch_offset = size
-
-        return int(_get_scratch_data(self.scratch_size))
-
-    def scratch_buffer_offset(self, size):
-
-        if size & 127 != 0:
-            size += 128 - (size & 127)
-
-        if size + self.scratch_offset > self.scratch_size:
-            raise RuntimeError("nervanagpu.scratch_size(%d) is too small for this operation." % self.scratch_size)
-
-        data = int(_get_scratch_data(self.scratch_size)) + self.scratch_offset
-        self.scratch_offset += size
-
-        return data
 
     def set_scratch_size(self, *args):
 
@@ -562,9 +500,6 @@ class NervanaGPU(Backend):
             self.ctx.detach()
         except:
             pass
-
-    def get_events(self):
-        return _get_events()
 
     def execute(self, optree):
         """
@@ -601,56 +536,6 @@ class NervanaGPU(Backend):
         return GPUTensor(self, shape, dtype=dtype, name=name,
                          persist_values=persist_values, allocator=allocator,
                          rounding=self.round_mode)
-
-    def array(self, ary, dtype=None, name=None, persist_values=True,
-              parallel=False, distributed=False, allocator=drv.mem_alloc):
-        """
-        converts a numpy array to a GPUTensor
-        """
-        dtype = self.default_dtype if dtype is None else dtype
-        if ary.ndim < self._min_dims:
-            ary = ary.reshape(ary.size, 1)
-        return GPUTensor(self, ary.shape, dtype=dtype, name=name,
-                         persist_values=persist_values, allocator=allocator,
-                         rounding=self.round_mode).set(ary)
-
-    def zeros(self, shape, dtype=None, name=None, persist_values=True,
-              parallel=False, distributed=False, allocator=drv.mem_alloc):
-        """
-        Returns an array of the given shape and dtype filled with 0's.
-        """
-        dtype = self.default_dtype if dtype is None else dtype
-        return GPUTensor(self, shape, dtype=dtype, name=name,
-                         persist_values=persist_values, allocator=allocator,
-                         rounding=self.round_mode)._assign(0)
-
-    def ones(self, shape, dtype=None, name=None, persist_values=True,
-             parallel=False, distributed=False, allocator=drv.mem_alloc):
-        """
-        Returns an array of the given shape and dtype filled with 1's.
-        """
-        dtype = self.default_dtype if dtype is None else dtype
-        return GPUTensor(self, shape, dtype=dtype, name=name,
-                         persist_values=persist_values, allocator=allocator,
-                         rounding=self.round_mode)._assign(1)
-
-    def empty_like(self, other_ary, name=None):
-        """
-        Returns an array with the same params as another
-        """
-        return GPUTensor(self, other_ary.shape, dtype=other_ary.dtype,
-                         name=name, persist_values=other_ary.persist_values,
-                         allocator=other_ary.allocator, rounding=self.round_mode)
-
-    def zeros_like(self, other_ary, name=None):
-        """
-        Returns an array with the same params as another
-        """
-        return GPUTensor(self, other_ary.shape, dtype=other_ary.dtype,
-                         name=name, persist_values=other_ary.persist_values,
-                         allocator=other_ary.allocator,
-                         rounding=self.round_mode)._assign(0)
-
 
     def conv_layer(self, dtype,
                    N, C, K,
