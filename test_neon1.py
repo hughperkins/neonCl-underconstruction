@@ -12,7 +12,7 @@ batch_size = 128
 input_filters = 32
 output_filters = 32
 
-gen_backend(backend='gpu', batch_size=batch_size,
+gen_backend(batch_size=batch_size,
             datatype=np.float32, device_id=0)
 
 #init = Gaussian()

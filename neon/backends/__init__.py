@@ -24,13 +24,14 @@ import numpy as np
 from math import ceil
 
 from neon import NervanaObject
-#from neon.backends.autodiff import Autodiff
+from neon.backends.util import check_gpu
 from neon.backends.util.check_gpu import get_device_count
+from neon.backends.nervanagpu import NervanaGPU
 
 
-def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
+def gen_backend(datatype=np.float32,
                 batch_size=0, stochastic_round=False, device_id=0,
-                max_devices=get_device_count(), compat_mode=None,
+                compat_mode=None,
                 deterministic_update=None, deterministic=None,
                 cache_dir=os.path.join(os.path.expanduser('~'), 'nervana/cache')):
     """
@@ -39,11 +40,6 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
     backend is returned.
 
     Arguments:
-        backend (string, optional): 'cpu' or 'gpu'.
-        rng_seed (numeric, optional): Set this to a numeric value which can be used to seed the
-                                      random number generator of the instantiated backend.
-                                      Defaults to None, which doesn't explicitly seed (so each run
-                                      will be different)
         datatype (dtype): Default tensor data type. CPU backend supports np.float64, np.float32,
                           and np.float16; GPU backend supports np.float32 and np.float16.
         batch_size (int): Set the size the data batches.
@@ -55,9 +51,6 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                                                Only affects the gpu backend.
         device_id (numeric, optional): Set this to a numeric value which can be used to select
                                        device on which to run the process
-        max_devices (int, optional): For use with multi-GPU backend only.
-                                      Controls the maximum number of GPUs to run
-                                      on.
         compat_mode (str, optional): if this is set to 'caffe' then the conv and pooling
                                      layer output sizes will match that of caffe as will
                                      the dropout layer implementation
@@ -86,49 +79,18 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                       'specifying random seed')
        deterministic = None
 
-    if backend == 'cpu' or backend is None:
-        from neon.backends.nervanacpu import NervanaCPU
-        be = NervanaCPU(rng_seed=rng_seed, default_dtype=datatype, compat_mode=compat_mode)
-    elif backend == 'gpu' or backend == 'mgpu':
-        gpuflag = False
-        # check nvcc
-        from neon.backends.util import check_gpu
-        gpuflag = (check_gpu.get_compute_capability(device_id) >= 3.0)
-        if gpuflag is False:
-            raise RuntimeError("Device " + str(device_id) + " does not have CUDA compute " +
-                               "capability 3.0 or greater")
-        if backend == 'gpu':
-            from neon.backends.nervanagpu import NervanaGPU
-            # init gpu
-            be = NervanaGPU(rng_seed=rng_seed, default_dtype=datatype,
-                            stochastic_round=stochastic_round,
-                            device_id=device_id,
-                            compat_mode=compat_mode,
-                            deterministic=deterministic,
-                            cache_dir=cache_dir)
-        else:
-            try:
-                from mgpu.nervanamgpu import NervanaMGPU
-                # init multiple GPU
-                be = NervanaMGPU(rng_seed=rng_seed,
-                                 default_dtype=datatype,
-                                 stochastic_round=stochastic_round,
-                                 num_devices=max_devices,
-                                 compat_mode=compat_mode,
-                                 deterministic=deterministic,
-                                 cache_dir=cache_dir)
-            except ImportError:
-                logger.error("Multi-GPU support is a premium feature "
-                             "available exclusively through the Nervana cloud."
-                             " Please contact info@nervanasys.com for details.")
-                raise
-    elif backend == 'argon':
-        from argon.neon_backend.ar_backend import ArBackend
-        be = ArBackend(rng_seed=rng_seed, default_dtype=datatype)
-    else:
-        raise ValueError("backend must be one of ('cpu', 'gpu', 'mgpu')")
-
-    logger.info("Backend: {}, RNG seed: {}".format(backend, rng_seed))
+    # check nvcc
+    gpuflag = (check_gpu.get_compute_capability(device_id) >= 3.0)
+    if gpuflag is False:
+        raise RuntimeError("Device " + str(device_id) + " does not have CUDA compute " +
+                           "capability 3.0 or greater")
+    # init gpu
+    be = NervanaGPU(default_dtype=datatype,
+                    stochastic_round=stochastic_round,
+                    device_id=device_id,
+                    compat_mode=compat_mode,
+                    deterministic=deterministic,
+                    cache_dir=cache_dir)
 
     NervanaObject.be = be
     be.bsz = batch_size
@@ -139,19 +101,9 @@ def cleanup_backend():
     if NervanaObject.be is None:
         return;
     be = NervanaObject.be
-#    from neon.backends.nervanacpu import NervanaCPU
-#    if type(be) is NervanaGPU:
-    from neon.backends.nervanagpu import NervanaGPU
     try:
-        if type(be) is NervanaGPU:
-            be.ctx.pop()
-            be.ctx.detach()
-        else:
-            from mgpu.nervanamgpu import NervanaMGPU
-            assert type(be) is NervanaMGPU
-            for ctx in be.ctxs:
-                ctx.pop()
-                ctx.detach()
+        be.ctx.pop()
+        be.ctx.detach()
     except:
         pass
     del(be)
