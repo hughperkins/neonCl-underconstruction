@@ -93,8 +93,8 @@ class Backend(object):
         self.default_dtype = default_dtype
 
         # use RandomState instead of seed
-        self.rng_seed = rng_seed
-        self.rng = self.gen_rng(rng_seed)
+#        self.rng_seed = rng_seed
+#        self.rng = self.gen_rng(rng_seed)
 
         # batch size
         self.bsz = None
@@ -111,7 +111,8 @@ class Backend(object):
         if deterministic is not None:
             logger.warning('deterministic arg is deprecated in favor of specifying random seed')
 
-        self.deterministic = self.rng_seed is not None
+#        self.deterministic = self.rng_seed is not None
+        self.deterministic = False   # ???
 
     def output_dim(self, X, S, padding, strides, pooling=False):
         """
