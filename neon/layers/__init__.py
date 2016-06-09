@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from neon.layers.layer import (Conv, Convolution)
+from neon.layers.layer import (Convolution)
 #from neon.layers.recurrent import (Recurrent, LSTM, GRU, RecurrentSum, RecurrentMean, RecurrentLast,
 #                                   BiRNN, BiLSTM, DeepBiRNN, DeepBiLSTM)
 #from neon.layers.container import (Tree, Sequential, MergeMultistream, MergeBroadcast, Multicost,
