@@ -31,8 +31,8 @@ from math import log
 
 from neon.backends import kernel_specs
 from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
-from neon.backends.layer_gpu import ConvLayer, DeconvLayer, PoolLayer, _get_sm_count
-from neon.backends.kernels.cuda import pooling, roipooling
+from neon.backends.layer_gpu import ConvLayer, _get_sm_count
+#from neon.backends.kernels.cuda import pooling, roipooling
 from scikits.cuda import cublas
 
 _none_slice = slice(None, None, None)

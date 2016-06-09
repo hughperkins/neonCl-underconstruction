@@ -139,20 +139,20 @@ def cleanup_backend():
     if NervanaObject.be is None:
         return;
     be = NervanaObject.be
-    from neon.backends.nervanacpu import NervanaCPU
-    if type(be) is not NervanaCPU:
-        from neon.backends.nervanagpu import NervanaGPU
-        try:
-            if type(be) is NervanaGPU:
-                be.ctx.pop()
-                be.ctx.detach()
-            else:
-                from mgpu.nervanamgpu import NervanaMGPU
-                assert type(be) is NervanaMGPU
-                for ctx in be.ctxs:
-                    ctx.pop()
-                    ctx.detach()
-        except:
-            pass
+#    from neon.backends.nervanacpu import NervanaCPU
+#    if type(be) is NervanaGPU:
+    from neon.backends.nervanagpu import NervanaGPU
+    try:
+        if type(be) is NervanaGPU:
+            be.ctx.pop()
+            be.ctx.detach()
+        else:
+            from mgpu.nervanamgpu import NervanaMGPU
+            assert type(be) is NervanaMGPU
+            for ctx in be.ctxs:
+                ctx.pop()
+                ctx.detach()
+    except:
+        pass
     del(be)
     NervanaObject.be = None
