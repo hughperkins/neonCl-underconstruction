@@ -216,57 +216,6 @@ class Backend(object):
         num_dev = 1 if parallelism in ('Data', 'Model') else getattr(self, 'num_dev', 1)
         return num_dev * np.prod(shape)
 
-    def distribute_data(self, tensor, layer_parallelism):
-        """
-        For backends which support distributed training, this will distribute
-        or gather the error or activation tensor depending on the type of
-        parallelism used to distribute the layer computation. Currently
-        this is only supported by multi-GPU in Nervana cloud.
-
-        Arguments:
-            tensor: Tensor containing either activations or errors
-            layer_parallelism: Type of parallelism expected by the layer
-
-        Returns:
-            Tensor which has been altered by this call or None
-        """
-        return None
-
-    def revert_tensor(self, tensor):
-        """
-        Reverts a tensor to its original state after being distributed by
-        distribute_data
-
-        Arguments:
-            tensor: Tensor to be reverted
-        """
-        pass
-
-    def execute(self, node):
-        """
-        Execute the optree. There must be one and only one 'assign' op at the
-        top of the optree when execute is called.
-
-        Arguments:
-            node (OpTreeNode): The op-tree to execute.
-        """
-        pass
-
-    def take(self, a, indices, axis, out=None):
-        """
-        Extract elements based on the indices along a given axis.
-
-        Arguments:
-            a (Tensor): the Tensor on which to perform the operation
-            indices (Tensor, numpy ndarray): indicies of elements to select
-            axis (int, optional): the dimension along which to compute.
-                                  If set to None, we will extract over all
-                                  dimensions (flattened first)
-            out (Tensor, optional): where the result will be stored. If out is
-                                    None, only the op-tree will be returned.
-        """
-        return a.take(indices, axis, out)
-
     def conv_layer(self, dtype,
                    N, C, K,
                    D=1, H=1, W=1,
