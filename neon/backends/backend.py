@@ -127,13 +127,13 @@ class Backend(object):
         """
 
         if self.check_caffe_compat() and pooling:
-            size = int(ceil(float(X - S + 2 * padding)/strides)) + 1
+            size = int(ceil(float(X - S + 2 * padding) // strides)) + 1
             if padding > 0 and (size - 1)*strides >= X + padding:
                 # decrement size if last pooling op is completely in padding
                 size -= 1
         else:
             # normal neon output size determination
-            size = (X - S + 2 * padding)/strides + 1
+            size = (X - S + 2 * padding) // strides + 1
 
         if pooling and padding >= S:
             raise ValueError("Padding dim %d incompatible with filter size %d" % (padding, S))
