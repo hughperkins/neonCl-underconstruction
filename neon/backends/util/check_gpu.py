@@ -14,7 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 # pylint: skip-file
-
+from __future__ import print_function
 
 def get_compute_capability(device_id=None, verbose=False):
     """
@@ -59,7 +59,7 @@ def get_compute_capability(device_id=None, verbose=False):
         full_version += [major + minor / 10.]
 
     if verbose:
-        print "Found GPU(s) with compute capability:", full_version
+        print("Found GPU(s) with compute capability:", full_version)
 
     return max(full_version)
 
@@ -90,9 +90,9 @@ def get_device_count(verbose=False):
     count = drv.Device.count()
 
     if verbose:
-        print "Found %d GPU(s)", count
+        print("Found %d GPU(s)", count)
 
     return count
 
 if __name__ == '__main__':
-    print get_compute_capability(verbose=False)
+    print(get_compute_capability(verbose=False))
