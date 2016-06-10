@@ -31,4 +31,5 @@ neon/backends/kernels/dump
 neon/data/loader/loader
 
 dist/
+env3/
 
