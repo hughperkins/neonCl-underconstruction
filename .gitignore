@@ -32,4 +32,5 @@ neon/data/loader/loader
 
 dist/
 env3/
+setenv.sh
 

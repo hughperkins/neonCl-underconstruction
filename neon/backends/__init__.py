@@ -25,7 +25,6 @@ from math import ceil
 
 from neon import NervanaObject
 from neon.backends.util import check_gpu
-from neon.backends.util.check_gpu import get_device_count
 from neon.backends.nervanagpu import NervanaGPU
 
 
