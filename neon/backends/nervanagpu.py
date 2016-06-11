@@ -21,13 +21,6 @@ import sys
 import numpy as np
 import pycuda.driver as drv
 import logging
-from pycuda.tools import context_dependent_memoize
-#from pycuda.curandom import MRG32k3aRandomNumberGenerator as rng_mrg
-from pycuda.gpuarray import GPUArray as p_gpuarray
-from struct import unpack_from
-from pytools import memoize_method
-from functools import wraps
-from math import log
 
 from neon.backends.backend import Backend
 from neon.backends.layer_gpu import ConvLayer, _get_sm_count
@@ -139,7 +132,6 @@ class NervanaGPU(Backend):
             os.makedirs(self.cache_dir)
 
     def set_scratch_size(self, *args):
-
         total_size = 0
         for size in args:
             if size & 127 != 0:
@@ -252,25 +244,6 @@ class NervanaGPU(Backend):
             return msecs, gflops
         return 0, 0
 
-# Note the strides computed here do not include the dtype.itemsize
-def _contiguous_strides(shape):
-    if shape:
-        strides = [1]
-        for s in shape[:0:-1]:
-            strides.append(strides[-1] * s)
-        return tuple(strides[::-1])
-    else:
-        return ()
-
-
-@context_dependent_memoize
-def _get_scratch_data(scratch_size):
-    return drv.mem_alloc(scratch_size)
-
-
-@context_dependent_memoize
-def _get_events():
-    return (drv.Event(), drv.Event())
 
 # debugging tool
 # import re
