@@ -35,6 +35,10 @@ def _get_conv_kernel(ctx, options, dtype, filter_size, bsum, operation, filter_b
         base_x = output_pixel_x * stride_w - padding_w;
         base_y = output_pixel_y * stride_h - padding_h;
 
+        // This will have 1s for this tid, and all the tids below it
+        // eg:
+        //    1 << 4 - 1
+        // => 0b1111
         unsigned int mask = (1 << tid) - 1;
 
         while(rs < FILTER_SIZE)
@@ -47,7 +51,11 @@ def _get_conv_kernel(ctx, options, dtype, filter_size, bsum, operation, filter_b
 
             //Check if the index is valid
             int in_bounds = (index_x >= 0 && index_x < W && index_y >= 0 && index_y < H);
-            unsigned int threads_in_bounds = __ballot(in_bounds);
+            // from cuda manual:
+            // __ballot(predicate) :
+            // Evaluate predicate for all active threads of the warp and return an integer whose
+            // Nth bit is set if and only if predicat
+// TODO:            unsigned int threads_in_bounds = __ballot(in_bounds);
 
             //Store lookup table entry
             if(in_bounds)
@@ -56,11 +64,12 @@ def _get_conv_kernel(ctx, options, dtype, filter_size, bsum, operation, filter_b
                 lut_entry.x = ((index_y * W + index_x) * N) >> 2;
                 lut_entry.y = (rs * K) >> 2;
 
-                int index = lut_size_local + __popc(threads_in_bounds & mask);
+                int index = 0;
+                // TODO:      int index = lut_size_local + __popc(threads_in_bounds & mask);
                 lookup_table[index] = lut_entry;
             }
 
-            lut_size_local += __popc(threads_in_bounds);
+     // TODO:       lut_size_local += __popc(threads_in_bounds);
 
             rs += 32;
         }
@@ -184,6 +193,7 @@ kernel void conv_%(operation)s(
     output_pixel = output_pixel_x + (output_pixel_y * Q);
 
     int filter_id = get_group_id(1) * get_local_size(1);
+    // tid is the id within the workgroup, in a flat 1d space
     int tid = get_local_id(0) + get_local_id(1) * get_local_size(0);
 
     //Offset buffers based on thread id
@@ -203,7 +213,7 @@ kernel void conv_%(operation)s(
     barrier(CLK_LOCAL_MEM_FENCE);
 
     lut_size_local = lut_size;
-    Matrix result[REG_TILE_Y] = {0};
+    Matrix result[REG_TILE_Y];
     output_pixel = (output_pixel * N) >> 2;
     if(lut_size_local > 0)
     {
@@ -220,12 +230,12 @@ kernel void conv_%(operation)s(
         int c, rs;
         _idiv_fast(CRS - get_local_id(1) - 1, lut_size_local, reciprocal, &c, &rs);
 
-        int2 lut_entry = ((get_local_id(1) & 7) >= crs) ? make_int2(0, 0) : lookup_table[rs];
+        int2 lut_entry = ((get_local_id(1) & 7) >= crs) ? (int2)0 : lookup_table[rs];
         %(a_name)s_data[get_local_id(1)][get_local_id(0)].f4 =
-            ((get_local_id(1) & 7) >= crs) ? make_float4(0, 0, 0, 0) :
+            ((get_local_id(1) & 7) >= crs) ? (float4)0.0f :
             I[(c * input_channel_size)  + lut_entry.x].f4;
         %(b_name)s_data[get_local_id(1)][get_local_id(0)].f4 = %(check_filter_cond)s
-            ((get_local_id(1) & 7) >= crs) ? make_float4(0, 0, 0, 0) :
+            ((get_local_id(1) & 7) >= crs) ? (float4)0.0f :
             F[(c * filter_channel_size) + lut_entry.y].f4;
 
         //Iterate over entire filter
@@ -306,7 +316,8 @@ kernel void conv_%(operation)s(
                 int out_index = (filter_id * output_filter_size) + output_pixel + image_id;
                 %(bsum_code)s
 
-                Matrix cur_value = {0};
+                Matrix cur_value;
+                cur_value.f4 = (float4)0.0f;
                 if(beta > 0.0f)
                 {
                     cur_value.f4 = O[out_index].f4;
