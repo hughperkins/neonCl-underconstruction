@@ -20,6 +20,7 @@ import os
 import sys
 import numpy as np
 import pycuda.driver as drv
+from pycuda.tools import context_dependent_memoize
 import logging
 
 from neon.backends.backend import Backend
@@ -125,6 +126,18 @@ class NervanaGPU(Backend):
         if not os.path.isdir(self.cache_dir):
             os.makedirs(self.cache_dir)
 
+    def scratch_buffer(self, size):
+
+        if size & 127 != 0:
+            size += 128 - (size & 127)
+
+        if size > self.scratch_size:
+            raise RuntimeError("nervanagpu.scratch_size(%d) is too small for this operation." % self.scratch_size)
+
+        self.scratch_offset = size
+
+        return int(_get_scratch_data(self.scratch_size))
+
     def set_scratch_size(self, *args):
         total_size = 0
         for size in args:
@@ -199,6 +212,7 @@ class NervanaGPU(Backend):
     def update_conv(self, layer, I, E, grad_F, alpha=1.0, repeat=1):
         assert layer.sizeI == I.size
         assert layer.sizeO == E.size
+        print('grad_F', grad_F)
         assert layer.sizeF == grad_F.size
 
         layer.updat_kernels.bind_params(I, E, grad_F, alpha)
@@ -232,6 +246,9 @@ class NervanaGPU(Backend):
             return msecs, gflops
         return 0, 0
 
+@context_dependent_memoize
+def _get_scratch_data(scratch_size):
+    return drv.mem_alloc(scratch_size)
 
 # debugging tool
 # import re

@@ -18,6 +18,9 @@ Python code to wrap convolution kernels
 import numpy as np
 import pycuda.driver as drv
 import sys
+from pycuda.compiler import SourceModule
+from pycuda.tools import context_dependent_memoize
+from neon.backends.cuda_templates import _ew_types
 from neon.backends.util.math_helper import magic64, magic32, ceil_div
 from neon.backends.kernels.cuda.convolution import _get_conv_kernel
 from neon.backends.kernels.cl import convolution_cl
@@ -284,7 +287,7 @@ class UpdateCuda(KernelGroup):
 
     def bind_params(self, I, E, O, alpha):
         assert I.dtype == E.dtype
-        if O.dtype.type is not np.float32:
+        if O.dtype is not np.float32:
             update_temp = self.lib.scratch_buffer((self.determ or O.size)*4)
             self.convert_args = [update_temp, "f4", O, False]
         else:
@@ -317,4 +320,63 @@ class UpdateCuda(KernelGroup):
 def _flatten(lst):
     return sum(([x] if not isinstance(x, (list, tuple))
                 else _flatten(x) for x in lst), [])
+
+@context_dependent_memoize
+def _get_shuffle_kernel(dtype):
+
+    _shuffle_kernel = r"""
+__global__ void dimShuffle(
+    %(type)s* out, const %(type)s* in,
+    int TRSK, int RSK, int SK, int K,
+    int TRSC, int RSC, int SC, int C,
+    int RS, int T, int R, int S,
+    int magic_RS, int shift_RS,
+    int magic_S,  int shift_S)
+{
+    __shared__ %(type)s tile[32][33];
+
+    int tx  = threadIdx.x;
+    int ty  = threadIdx.y;
+    int bk  = blockIdx.x;
+    int bc  = blockIdx.y;
+    int trs = blockIdx.z;
+
+    int k  = bk * 32 + tx;
+    int c  = bc * 32 + ty;
+
+    int t  = magic_RS * trs; t >>= shift_RS;
+    int rs = trs - t*RS;
+
+    int r = magic_S * rs; r >>= shift_S;
+    int s = rs - r*S;
+
+    for (int j = 0; j < 32; j += 8)
+    {
+        int cj = c + j;
+        if (cj < C && k < K)
+            tile[ty + j][tx] = in[ cj*TRSK + t*RSK + r*SK + s*K + k ];
+    }
+    __syncthreads();
+
+    k = bk * 32 + ty;
+    c = bc * 32 + tx;
+
+    // Mirror RST
+    s = S - s - 1;
+    r = R - r - 1;
+    t = T - t - 1;
+
+    for (int i = 0; i < 32; i += 8)
+    {
+        int ki = k + i;
+        if (ki < K && c < C)
+            out[ ki*TRSC + t*RSC + r*SC + s*C + c ] = tile[tx][ty + i];
+    }
+}
+"""
+    code = _shuffle_kernel % _ew_types[dtype]
+    module = SourceModule(code)
+    kernel = module.get_function("dimShuffle")
+    kernel.prepare("PPIIIIIIIIIIIIIIII")
+    return kernel
 

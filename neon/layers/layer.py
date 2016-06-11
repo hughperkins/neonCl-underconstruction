@@ -230,6 +230,8 @@ class Convolution(ParameterLayer):
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
+        print('error', error)
+        print('self.W', self.W)
         if self.deltas:
             self.be.bprop_conv(self.nglayer, self.W, error, self.deltas,
                                alpha=alpha, beta=beta)
