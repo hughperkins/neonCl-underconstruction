@@ -35,13 +35,10 @@ if sys.version_info >= (3, 0):
 
 
 class Layer(object):
-
     """
     GPU Layer base class
     """
-
     def __init__(self, lib, dtype, N, dtypeU=None):
-
         if hasattr(dtype, 'type'):
             self.dtype = dtype
         else:
@@ -59,7 +56,6 @@ class Layer(object):
 
 
 class ConvLayer(Layer):
-
     """
     ConvLayer parameter object.
     This then is passed as an argument to all the convolution operations.
@@ -87,7 +83,6 @@ class ConvLayer(Layer):
                  pad_d=0, pad_h=0, pad_w=0,
                  str_d=1, str_h=1, str_w=1,
                  bsum=False):
-
         super(ConvLayer, self).__init__(lib, dtype, N, np.float32)
 
         # Compute the output spatial dimensions
