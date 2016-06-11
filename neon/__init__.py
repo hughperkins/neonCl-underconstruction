@@ -16,16 +16,7 @@
 Nervana's deep learning library
 """
 
-try:
-    from neon.version import VERSION as __version__  # noqa
-except ImportError:
-    import sys
-    print("ERROR: Version information not found.  Ensure you have built "
-          "the software.\n    From the top level dir issue: 'make'")
-    sys.exit(1)
-
-
-class NervanaObject(object):
+class NervafnaObject(object):
     """
     Base (global) object available to all other classes.
 

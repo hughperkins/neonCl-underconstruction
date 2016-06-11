@@ -6,7 +6,7 @@ import pycuda.autoinit
 import time
 
 from neon.layers.layer import Convolution
-from neon.backends import gen_backend
+from neon.backends import Backend
 
 
 def printDims(W, I):
@@ -26,11 +26,11 @@ def check(O, W, I, c, h, w, n):
     kH = W.shape[1]
     kW = W.shape[2]
 #    print('Ci', Ci, 'iH', iH, 'iW', iW, 'Co', Co, 'kH', kH, 'kW', kW)
-    
+
     co = c
     padw = 1
     padh = 1
-    
+
     # we are going to apply entire kernel, over all input channels, to the input
     # image, in one location
     sum = 0
@@ -77,47 +77,47 @@ def simple1():
 
     np.random.seed(123)
 
-    gen_backend(batch_size=batch_size,
-            datatype=np.float32, device_id=0)
+    with Backend(batch_size=batch_size,
+            datatype=np.float32, device_id=0) as be:
 
-    W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
-    print('W.shape', W.shape)
-    W_cuda = MyTensor.from_np(W)
-    
-    inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
-    inputs[:] = np.random.randn(*inputs.shape)
-    inputs_cuda = MyTensor.from_np(inputs)
+        W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
+        print('W.shape', W.shape)
+        W_cuda = MyTensor.from_np(W)
 
-    print('type(inputs_cuda)', type(inputs_cuda))
+        inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
+        inputs[:] = np.random.randn(*inputs.shape)
+        inputs_cuda = MyTensor.from_np(inputs)
 
-    conv = Convolution((3, 3, output_filters), strides=1, padding=1) #, init=init)
-    print('created conv')
+        print('type(inputs_cuda)', type(inputs_cuda))
 
-    conv.configure((input_filters,image_size, image_size))
-    conv.W = W_cuda
-    print('configure done')
-    outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
-    outputs_cuda = MyTensor.from_np(outputs)
-    conv.outputs = outputs_cuda
-    conv.fprop(inputs_cuda)
-    
-    for it in range(3):
-        start = time.time()
+        conv = Convolution((3, 3, output_filters), strides=1, padding=1, be=be) #, init=init)
+        print('created conv')
+
+        conv.configure((input_filters,image_size, image_size))
+        conv.W = W_cuda
+        print('configure done')
+        outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
+        outputs_cuda = MyTensor.from_np(outputs)
+        conv.outputs = outputs_cuda
         conv.fprop(inputs_cuda)
-        cuda.Context.synchronize()
-        print('time=', time.time() - start)
 
-#    outputs = outputs_cuda.get()
-    outputs_cuda.to_host()
-    printDims(W=W, I=inputs)
-    check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0)
-    check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1)
-    check(W=W, I=inputs, O=outputs, c=0, h=1, w=0, n=0)
-    check(W=W, I=inputs, O=outputs, c=0, h=0, w=1, n=0)
-    check(W=W, I=inputs, O=outputs, c=1, h=0, w=0, n=0)
-    check(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27)
+        for it in range(3):
+            start = time.time()
+            conv.fprop(inputs_cuda)
+            cuda.Context.synchronize()
+            print('time=', time.time() - start)
 
-    print('outputs.shape', outputs.shape)
+    #    outputs = outputs_cuda.get()
+        outputs_cuda.to_host()
+        printDims(W=W, I=inputs)
+        check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0)
+        check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1)
+        check(W=W, I=inputs, O=outputs, c=0, h=1, w=0, n=0)
+        check(W=W, I=inputs, O=outputs, c=0, h=0, w=1, n=0)
+        check(W=W, I=inputs, O=outputs, c=1, h=0, w=0, n=0)
+        check(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27)
+
+        print('outputs.shape', outputs.shape)
 
 def one():
     image_size = 64
@@ -127,49 +127,48 @@ def one():
 
     np.random.seed(123)
     
-    gen_backend(batch_size=batch_size,
-            datatype=np.float32, device_id=0)
+    with Backend(batch_size=batch_size,
+            datatype=np.float32, device_id=0) as be:
+        W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
+        W_cuda = MyTensor.from_np(W)
 
-    W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
-    W_cuda = MyTensor.from_np(W)
+        print('type(W_cuda)', type(W_cuda))
 
-    print('type(W_cuda)', type(W_cuda))
+        inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
+        inputs[:] = np.random.randn(*inputs.shape)
+        inputs_cuda = MyTensor.from_np(inputs)
 
-    inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
-    inputs[:] = np.random.randn(*inputs.shape)
-    inputs_cuda = MyTensor.from_np(inputs)
+        print('type(inputs_cuda)', type(inputs_cuda))
 
-    print('type(inputs_cuda)', type(inputs_cuda))
+        conv = Convolution((3, 3, output_filters), strides=1, padding=1, be=be) #, init=init)
+        print('created conv')
+        conv.W = W_cuda
 
-    conv = Convolution((3, 3, output_filters), strides=1, padding=1) #, init=init)
-    print('created conv')
-    conv.W = W_cuda
+        conv.configure((input_filters,image_size, image_size))
+        conv.W = W_cuda
+        print('configure done')
+        outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
+        outputs_cuda = MyTensor.from_np(outputs)
+        conv.outputs = outputs_cuda
+        conv.fprop(inputs_cuda)
+        for it in range(3):
+          start = time.time()
+          conv.fprop(inputs_cuda)
+          cuda.Context.synchronize()
+          print('time=', time.time() - start)
 
-    conv.configure((input_filters,image_size, image_size))
-    conv.W = W_cuda
-    print('configure done')
-    outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
-    outputs_cuda = MyTensor.from_np(outputs)
-    conv.outputs = outputs_cuda
-    conv.fprop(inputs_cuda)
-    for it in range(3):
-      start = time.time()
-      conv.fprop(inputs_cuda)
-      cuda.Context.synchronize()
-      print('time=', time.time() - start)
-
-#    outputs = outputs_cuda.get()
-    outputs_cuda.to_host()
-    print(outputs[1:3,1:3])
-    print('outputs.shape', outputs.shape)
-    printDims(W=W, I=inputs)
-    check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0)
-    check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1)
-    check(W=W, I=inputs, O=outputs, c=0, h=0, w=1, n=0)
-    check(W=W, I=inputs, O=outputs, c=0, h=1, w=0, n=0)
-    check(W=W, I=inputs, O=outputs, c=1, h=0, w=0, n=0)
-    check(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27)
-    check(W=W, I=inputs, O=outputs, c=17, h=25, w=7, n=27)
+    #    outputs = outputs_cuda.get()
+        outputs_cuda.to_host()
+        print(outputs[1:3,1:3])
+        print('outputs.shape', outputs.shape)
+        printDims(W=W, I=inputs)
+        check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0)
+        check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1)
+        check(W=W, I=inputs, O=outputs, c=0, h=0, w=1, n=0)
+        check(W=W, I=inputs, O=outputs, c=0, h=1, w=0, n=0)
+        check(W=W, I=inputs, O=outputs, c=1, h=0, w=0, n=0)
+        check(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27)
+        check(W=W, I=inputs, O=outputs, c=17, h=25, w=7, n=27)
 
 simple1()
 one()

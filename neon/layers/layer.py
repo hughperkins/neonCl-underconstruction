@@ -13,10 +13,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import numpy as np
-from neon import NervanaObject
+#from neon import NervanaObject
 
 
-class Layer(NervanaObject):
+class Layer(object):
 
     """
     Top level generic neural network layer class from which all other layer
@@ -29,8 +29,8 @@ class Layer(NervanaObject):
             distributed backends (see gen_backend for details).
     """
 
-    def __init__(self, name=None):
-        super(Layer, self).__init__(name)
+    def __init__(self, be, name=None):
+#        super(Layer, self).__init__(name)
         self.outputs = None
         self.has_params = False
         self.inputs = None
@@ -38,6 +38,7 @@ class Layer(NervanaObject):
         self.owns_delta = False
         self.deltas = None
         self.actual_bsz = None
+        self.be = be
 
     def configure(self, in_obj):
         """
@@ -138,8 +139,8 @@ class ParameterLayer(Layer):
         name (str, optional): layer name. Defaults to "ParameterLayer"
     """
 
-    def __init__(self, init=None, name=None):
-        super(ParameterLayer, self).__init__(name=name)
+    def __init__(self, be, init=None, name=None):
+        super(ParameterLayer, self).__init__(be=be, name=name)
         self.has_params = True
         self.init = init
         self.W = None
@@ -180,9 +181,9 @@ class Convolution(ParameterLayer):
         name (str, optional): layer name. Defaults to "ConvolutionLayer"
     """
 
-    def __init__(self, fshape, strides={}, padding={}, init=None, bsum=False,
+    def __init__(self, fshape, be, strides={}, padding={}, init=None, bsum=False,
                  name=None):
-        super(Convolution, self).__init__(init, name)
+        super(Convolution, self).__init__(init=init, name=name, be=be)
         self.nglayer = None
         bsum = bsum and not self.be.deterministic
         self.convparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
