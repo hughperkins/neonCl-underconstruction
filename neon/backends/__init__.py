@@ -89,9 +89,6 @@ class Backend(object):
         return self.be
 
     def __exit__(self, *args):
-        try:
-            self.be.ctx.pop()
-            self.be.ctx.detach()
-        except:
-            pass
+         self.be.ctx.pop()
+         self.be.ctx.detach()
 
