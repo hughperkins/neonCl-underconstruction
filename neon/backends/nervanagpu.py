@@ -147,7 +147,7 @@ class NervanaGPU(Backend):
                    T=1, R=1, S=1,
                    pad_d=0, pad_h=0, pad_w=0,
                    str_d=1, str_h=1, str_w=1,
-                   relu=False, bsum=False):
+                   bsum=False):
         """
         Create a new ConvLayer parameter object.
         This then is passed as an argument to all the convolution operations.
@@ -176,7 +176,7 @@ class NervanaGPU(Backend):
         """
         return ConvLayer(self, dtype, N, C, K, D, H, W, T, R, S,
                          pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                         relu, bsum)
+                         bsum)
 
     def fprop_conv(self, layer, I, F, O, alpha=1.0, beta=0.0, bsum=None, repeat=1):
         assert layer.sizeI == I.size

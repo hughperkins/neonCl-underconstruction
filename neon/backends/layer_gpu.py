@@ -21,7 +21,6 @@ TODO: remove any non-param caching code, neon layers should replace benchmark co
 import logging
 import numpy as np
 import pycuda.driver as drv
-#from neon.backends import kernel_specs
 from neon.backends import convolution
 from pycuda.tools import context_dependent_memoize
 from operator import mul
@@ -83,27 +82,6 @@ class Layer(object):
 
         self.delta_stats = self.lib.empty((self.dimI2[0], 1), dtype=np.float32)
 
-    def init_weights(self, loc=0.0, scale=0.1, shared=None, zeros=False):
-
-        if self.sizeF > 0:
-            if zeros:
-                self.weights  = self.lib.zeros(self.dimF, dtype=self.dtype)
-            else:
-                weights       = np.random.normal(loc, scale, self.dimF)
-                self.weights  = self.lib.array(weights, dtype=self.dtype)
-
-            if shared is None:
-                self.updat_out = self.lib.empty(self.dimF, dtype=self.dtypeU)
-            else:
-                self.updat_out = shared.share(self.dimF, dtype=self.dtypeU)
-
-            self.weight_stats = self.lib.empty((self.dimF2[0], 1), dtype=np.float32)
-
-    def scale_weights(self, scale):
-
-        mean = self.get_activation_mean()
-        self.weights[:] *= scale/mean
-
     def fprop(self, fprop_in, scale_weights=0):
         if self.fprop_in is None and fprop_in:
             self.fprop_in = fprop_in.reshape(self.dimI)
@@ -131,60 +109,6 @@ class Layer(object):
             print("updat:%10.5f mean %11.5f max %s" % (up_mean, up_max, self))
             print("weigh:%10.5f mean %11.5f max" % (wt_mean, wt_max))
             print("ratio:%10.5f mean %11.5f max" % (rt_mean, rt_max))
-
-    @staticmethod
-    def create(lib, conf, prev_layer, dtype):
-
-        config     = dict(conf)
-        layer_type = config.pop("layer")
-
-        # merge dtype specific settings
-        config["dtype"] = dtype
-
-        # merge shared params
-        config.update(config.pop("common", {}))
-
-        # Propagate the fixed and calculated dimensions
-        if prev_layer is not None:
-            config["N"] = prev_layer.N
-
-            if layer_type is FullLayer:
-                config["nIn"] = prev_layer.nOut
-            elif layer_type is PoolLayer and type(prev_layer) is FullLayer:
-                config["C"] = prev_layer.nOut
-            elif layer_type is BatchNorm and type(prev_layer) is FullLayer:
-                config["nIn"] = prev_layer.nOut
-            else:
-                config["C"] = prev_layer.K
-                config["D"] = prev_layer.M
-                config["H"] = prev_layer.P
-                config["W"] = prev_layer.Q
-
-                if layer_type is Inception:
-                    partitions  = config.pop("partitions")
-                    config["K"] = 0
-
-                    config["partitions"] = []
-                    for part in partitions:
-                        layer_sequence = []
-                        part_prev_layer = prev_layer
-                        for layer_conf in part:
-                            part_prev_layer = Layer.create(lib, layer_conf, part_prev_layer, dtype)
-                            layer_sequence.append(part_prev_layer)
-
-                        last = layer_sequence[-1]
-                        config["partitions"].append(layer_sequence)
-                        config["K"] += last.K
-                        if "P" in config:
-                            assert config["P"] == last.P and config["Q"] == last.Q
-                        else:
-                            config["M"] = last.M
-                            config["P"] = last.P
-                            config["Q"] = last.Q
-
-        # Instantiate the layer
-        return layer_type(lib, **config)
-
 
 
 class ConvLayer(Layer):
@@ -215,7 +139,7 @@ class ConvLayer(Layer):
                  T=1, R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
                  str_d=1, str_h=1, str_w=1,
-                 relu=False, bsum=False):
+                 bsum=False):
 
         super(ConvLayer, self).__init__(lib, dtype, N, np.float32)
 
@@ -235,7 +159,6 @@ class ConvLayer(Layer):
         self.MPQ = (M, P, Q)
         self.padding = (pad_d, pad_h, pad_w)
         self.strides = (str_d, str_h, str_w)
-        self.relu = relu
         self.bsum = bsum
 
         self.all_params = (N, C, K, D, H, W, T, R, S, pad_d, pad_h, pad_w, str_d, str_h, str_w)
@@ -257,72 +180,18 @@ class ConvLayer(Layer):
         # flop count for benchmarking
         self.flops = P*Q*M*K*N*C*R*S*T * 2.0
 
-        ####### Cuda C ###########
-        if lib.use_cudac_kernels:
-            print('cudac')
-            #3D conv not supported yet
-            if T > 1 or D > 1:
-                raise ValueError("3D Convolution not supported by CUDA C kernels.")
+        if T > 1 or D > 1:
+            raise ValueError("3D Convolution not supported by CUDA C kernels.")
 
-            if relu:
-                raise ValueError("Compound relu not supported by CUDA C kernels.")
-
-            self.fprop_kernels = convolution.FpropCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                                                       pad_d, pad_h, pad_w, str_d, str_h, str_w, bsum=bsum)
-            # TODO small C bprop?
-            self.bprop_kernels = convolution.BpropCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                                                       pad_d, pad_h, pad_w, str_d, str_h, str_w, bsum=bsum)
-            self.updat_kernels = convolution.UpdateCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                                                        pad_d, pad_h, pad_w, str_d, str_h, str_w)
+        self.fprop_kernels = convolution.FpropCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                                                   pad_d, pad_h, pad_w, str_d, str_h, str_w, bsum=bsum)
+        # TODO small C bprop?
+        self.bprop_kernels = convolution.BpropCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                                                   pad_d, pad_h, pad_w, str_d, str_h, str_w, bsum=bsum)
+        self.updat_kernels = convolution.UpdateCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                                                    pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
         logger.debug("%s: %s, %s, %s", str(self), str(self.fprop_kernels), str(self.bprop_kernels), str(self.updat_kernels))
-
-
-    def init_activations(self, fprop_out=None):
-
-        super(ConvLayer, self).init_activations(fprop_out)
-
-        if self.bsum:
-            self.batch_sum = self.lib.empty(self.dimS, dtype=np.float32)
-        else:
-            self.batch_sum = None
-
-    def fprop(self, fprop_in, scale_weights=0):
-        """
-        Conv Layer forward propagation.
-
-        Arguments:
-            fprop_in (Tensor): Inputs
-            scale_weights (float): Scale weights by scale/mean if nonzero
-
-        Returns:
-            fprop_out (Tensor): Output activations
-        or
-            (self.fprop_out, self.batch_sum) (tuple): Tuple with batch_sum
-                added as the second entry.
-        """
-        fprop_in = super(ConvLayer, self).fprop(fprop_in)
-        self.lib.fprop_conv(self, fprop_in, self.weights, self.fprop_out, bsum=self.batch_sum)
-
-        if scale_weights:
-            self.scale_weights(scale_weights)
-            self.fprop(fprop_in)
-
-        if self.bsum:
-            return (self.fprop_out, self.batch_sum)
-        return self.fprop_out
-
-    def bprop(self, bprop_in, beta=0):
-
-        if self.relu:
-            self.bprop_relu(bprop_in)
-        if self.bprop_out is not None:
-            self.lib.bprop_conv(self, self.weights, bprop_in, self.bprop_out, beta=beta)
-
-        self.lib.update_conv(self, self.fprop_in, bprop_in, self.updat_out)
-        self.grad_descent()
-
-        return self.bprop_out
 
     def __str__(self):
         return ("ConvLayer: NCK: (%3d, %3d, %3d) HW:%s" %
