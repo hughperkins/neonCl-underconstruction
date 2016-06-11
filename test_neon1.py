@@ -12,6 +12,8 @@ batch_size = 128
 input_filters = 32
 output_filters = 32
 
+np.random.seed(123)
+
 gen_backend(batch_size=batch_size,
             datatype=np.float32, device_id=0)
 
@@ -45,10 +47,18 @@ outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype
 outputs_cuda = gpuarray.to_gpu(outputs)
 conv.outputs = outputs_cuda
 conv.fprop(inputs_cuda)
-for it in range(10):
+for it in range(3):
   start = time.time()
   for i in range(10):
     conv.fprop(inputs_cuda)
   cuda.Context.synchronize()
   print('time=', time.time() - start)
+
+
+outputs = outputs_cuda.get()
+print(outputs[1:3,1:3])
+
+assert abs(outputs[1,1] - 1.33960593) < 1e-4
+assert abs(outputs[1,2] + 6.06682396) < 1e-4
+assert abs(outputs[2,2] - 8.76905346) < 1e-4
 
