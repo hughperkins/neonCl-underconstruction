@@ -89,6 +89,9 @@ class make_backend(object):
         return self.be
 
     def __exit__(self, *args):
+         print('make backend __exit__')
+#         del self.be
+
          self.be.ctx.pop()
          self.be.ctx.detach()
 

@@ -50,10 +50,8 @@ class NervanaGPU(Backend):
         TODO: define other keyword parameters!
         """
 
-    # size of the RNG pool on device
     # currently this is hard wired
     def __init__(self,
-#                 rng_seed=None,
                  default_dtype=np.float32,
                  stochastic_round=False,
                  deterministic=None,
@@ -140,12 +138,6 @@ class NervanaGPU(Backend):
 
         if total_size > self.scratch_size:
             self.scratch_size = total_size
-
-    def __del__(self):
-        try:
-            self.ctx.detach()
-        except:
-            pass
 
     def execute(self, optree):
         """
