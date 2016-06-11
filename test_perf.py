@@ -1,5 +1,5 @@
 from neon.layers.layer import Convolution
-from neon.backends import Backend
+from neon.backends.make_backend import make_backend
 import numpy as np
 import pycuda.driver as cuda
 #import pycuda.autoinit
@@ -13,7 +13,7 @@ output_filters = 32
 
 np.random.seed(123)
 
-with Backend(batch_size=batch_size,
+with make_backend(batch_size=batch_size,
             datatype=np.float32, device_id=0) as be:
     conv = Convolution((3, 3, output_filters), strides=1, padding=1, be=be)
     print('created conv')

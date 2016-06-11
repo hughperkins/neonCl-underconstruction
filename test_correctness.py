@@ -6,7 +6,7 @@ import pycuda.autoinit
 import time
 
 from neon.layers.layer import Convolution
-from neon.backends import Backend
+from neon.backends.make_backend import make_backend
 
 
 def printDims(W, I):
@@ -77,7 +77,7 @@ def simple1():
 
     np.random.seed(123)
 
-    with Backend(batch_size=batch_size,
+    with make_backend(batch_size=batch_size,
             datatype=np.float32, device_id=0) as be:
 
         W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
@@ -127,7 +127,7 @@ def one():
 
     np.random.seed(123)
     
-    with Backend(batch_size=batch_size,
+    with make_backend(batch_size=batch_size,
             datatype=np.float32, device_id=0) as be:
         W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
         W_cuda = MyTensor.from_np(W)
