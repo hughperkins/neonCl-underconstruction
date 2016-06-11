@@ -381,6 +381,7 @@ static inline uint ballot(const uint i) {
 #    if debug and operation == "bprop":
 #        options = options + ["-g", "-G"]
     module = cl.Program(ctx, code).build()
+    return module
 
 #    kernel = module.get_function("conv_" + operation)
 #    kernel.prepare("ffPPPPIIIIIIIIIIIIIIIIIIIIIIIIIIII")

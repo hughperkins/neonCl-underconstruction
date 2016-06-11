@@ -20,6 +20,8 @@ import pycuda.driver as drv
 import sys
 from neon.backends.util.math_helper import magic64, magic32, ceil_div
 from neon.backends.kernels.cuda.convolution import _get_conv_kernel
+from neon.backends.kernels.cl import convolution_cl
+from neon.backends.kernels.cl.clrunner import ClRunner
 
 
 if sys.version_info >= (3, 0):
@@ -83,6 +85,8 @@ class FpropCuda(KernelGroup):
         KRST = K * RST
         PQ = P * Q
         PQN = PQ * N
+        self.clRunner = ClRunner(dtype=self.dtype.str[1:], filter_size=R*S,
+                                       bsum=bsum, operation="fprop")
         self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=bsum, operation="fprop")
         grid = (PQ * (-(-N // 32)), (-(-K // 32)), 1)
@@ -110,6 +114,7 @@ class FpropCuda(KernelGroup):
                 drv.memset_d32_async(*self.bsum_zero)
             print('calling kernel', self.kernel, 'args', self.launch_args, 'shared_size', self.shared)
             self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
+            self.clRunner.execute(*self.launch_args, shared_size=self.shared)
         if unbind:
             self.bsum_zero = None
             self.launch_args[2:9] = (None,) * 7
