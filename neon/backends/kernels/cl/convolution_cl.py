@@ -51,11 +51,7 @@ def _get_conv_kernel(ctx, options, dtype, filter_size, bsum, operation, filter_b
 
             //Check if the index is valid
             int in_bounds = (index_x >= 0 && index_x < W && index_y >= 0 && index_y < H);
-            // from cuda manual:
-            // __ballot(predicate) :
-            // Evaluate predicate for all active threads of the warp and return an integer whose
-            // Nth bit is set if and only if predicat
-// TODO:            unsigned int threads_in_bounds = __ballot(in_bounds);
+            unsigned int threads_in_bounds = ballot(in_bounds);
 
             //Store lookup table entry
             if(in_bounds)
@@ -64,12 +60,11 @@ def _get_conv_kernel(ctx, options, dtype, filter_size, bsum, operation, filter_b
                 lut_entry.x = ((index_y * W + index_x) * N) >> 2;
                 lut_entry.y = (rs * K) >> 2;
 
-                int index = 0;
-                // TODO:      int index = lut_size_local + __popc(threads_in_bounds & mask);
+                int index = lut_size_local + popcnt(threads_in_bounds & mask);
                 lookup_table[index] = lut_entry;
             }
 
-     // TODO:       lut_size_local += __popc(threads_in_bounds);
+            lut_size_local += popcnt(threads_in_bounds);
 
             rs += 32;
         }
@@ -336,6 +331,30 @@ kernel void conv_%(operation)s(
 }
 """
 
+    # this will work on nvidia.  on others we can maybe use
+    # builtin popcnt and sub_group_reduce methods?
+    popcnt = """
+static inline uint popcnt(const uint i) {
+    uint n;
+    asm("popc.b32 %0, %1;" : "=r"(n) : "r" (i));
+    return n;
+}
+"""
+    ballot = """
+static inline uint ballot(const uint i) {
+  uint n;
+  asm(
+    "{\\n\\t"
+    "setp.ne.u32 %%p1, %1, 0;\\n\\t"
+    "vote.ballot.b32 %0, %%p1;\\n\\t"
+    "}"
+     : "=r"(n)
+     : "r" (i)
+  );
+  return n;
+}
+"""
+
     code = header_code + code
 
     magic = magic64(filter_size)
@@ -353,6 +372,8 @@ kernel void conv_%(operation)s(
         "filter_load_cond":     filter_load_cond,
         "check_filter_cond":    check_filter_cond
     }
+    code = popcnt + ballot + code
+
     with open('/tmp/out.cl', 'w') as f:
         f.write(code)
 
