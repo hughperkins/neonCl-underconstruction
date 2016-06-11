@@ -33,15 +33,12 @@ class Backend(object):
     def __init__(self, datatype=np.float32,
                 batch_size=0, stochastic_round=False, device_id=0,
                 compat_mode=None,
-                deterministic_update=None, deterministic=None,
                 cache_dir=os.path.join(os.path.expanduser('~'), 'nervana/cache')):
         self.datatype = datatype
         self.batch_size = batch_size
         self.stochastic_round = stochastic_round
         self.device_id = device_id
         self.compat_mode = compat_mode
-        self.deterministic_update = deterministic_update
-        self.deterministic = deterministic
         self.cache_dir = cache_dir
         self.be = None
 
@@ -76,11 +73,6 @@ class Backend(object):
             * Attempts to construct a GPU instance without a CUDA capable card or without nervanagpu
               package installed will cause the program to display an error message and exit.
         """
-        if self.deterministic_update is not None or self.deterministic is not None:
-           logger.warning('deterministic_update and deterministic args are deprecated in favor of '
-                          'specifying random seed')
-           self.deterministic = None
-
         # check nvcc
         self.gpuflag = (check_gpu.get_compute_capability(self.device_id) >= 3.0)
         if self.gpuflag is False:
@@ -91,7 +83,6 @@ class Backend(object):
                         stochastic_round=self.stochastic_round,
                         device_id=self.device_id,
                         compat_mode=self.compat_mode,
-                        deterministic=self.deterministic,
                         cache_dir=self.cache_dir)
 
         self.be.bsz = self.batch_size
