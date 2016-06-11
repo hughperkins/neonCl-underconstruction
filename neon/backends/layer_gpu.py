@@ -55,60 +55,8 @@ class Layer(object):
         self.sizeI  = 0
         self.sizeO  = 0
         self.sizeF  = 0
-        self.weights   = None
-        self.fprop_in  = None
-        self.fprop_out = None
-        self.bprop_in  = None
-        self.bprop_out = None
 
         self.learning_rate = 0.0
-
-    def init_activations(self, fprop_out=None):
-
-        if fprop_out is not None:
-            self.fprop_out = fprop_out
-        else:
-            self.fprop_out = self.lib.empty(self.dimO, dtype=self.dtype)
-
-        self.act_stats = self.lib.empty((self.dimO2[0], 1), dtype=np.float32)
-
-    def init_deltas(self, shared=None):
-
-        if shared is None:
-            self.bprop_out = self.lib.empty(self.dimI, dtype=self.dtype)
-        else:
-            self.bprop_out = shared[0].share(self.dimI)
-            shared.reverse()
-
-        self.delta_stats = self.lib.empty((self.dimI2[0], 1), dtype=np.float32)
-
-    def fprop(self, fprop_in, scale_weights=0):
-        if self.fprop_in is None and fprop_in:
-            self.fprop_in = fprop_in.reshape(self.dimI)
-        return self.fprop_in
-
-    def bprop(self, bprop_in, beta=0):
-        return bprop_in
-
-    def grad_descent(self):
-        self.weights[:] += self.updat_out*self.learning_rate
-
-    def fprop_stats(self):
-        print("fprop:%10.5f mean %11.5f max %s"
-              % (self.get_activation_mean(), self.get_activation_max(), self))
-
-    def bprop_stats(self):
-        if self.bprop_out is not None:
-            print("bprop:%10.5f mean %11.5f max %s"
-                  % (self.get_delta_mean(), self.get_delta_max(), self))
-
-        if self.weights is not None:
-            up_mean, up_max = (self.get_update_mean(), self.get_update_max())
-            wt_mean, wt_max = (self.get_weight_mean(), self.get_weight_max())
-            rt_mean, rt_max = (0.0001 * up_mean/wt_mean, 0.0001 * up_max/wt_max)
-            print("updat:%10.5f mean %11.5f max %s" % (up_mean, up_max, self))
-            print("weigh:%10.5f mean %11.5f max" % (wt_mean, wt_max))
-            print("ratio:%10.5f mean %11.5f max" % (rt_mean, rt_max))
 
 
 class ConvLayer(Layer):
@@ -191,12 +139,7 @@ class ConvLayer(Layer):
         self.updat_kernels = convolution.UpdateCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                                                     pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
-        logger.debug("%s: %s, %s, %s", str(self), str(self.fprop_kernels), str(self.bprop_kernels), str(self.updat_kernels))
-
-    def __str__(self):
-        return ("ConvLayer: NCK: (%3d, %3d, %3d) HW:%s" %
-                (self.N, self.C, self.K, self.DHW[1:3]))
-
+#        logger.debug("%s: %s, %s, %s", str(self), str(self.fprop_kernels), str(self.bprop_kernels), str(self.updat_kernels))
 
 
 # Magic numbers and shift amounts for integer division
