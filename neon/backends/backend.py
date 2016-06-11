@@ -23,49 +23,6 @@ from math import ceil
 logger = logging.getLogger(__name__)
 
 
-class Tensor(object):
-    """
-    The n-dimensional array data structure. GPUTensor and Tensor inherits
-    Tensor. Depending on backend, may have additional keyword arguments.
-    All non-keywords arguments shall be in exact same order as Tensor.
-
-    Arguments:
-        backend (Backend): backend of the tensor.
-        shape (tuple, optional): shape of the tensor.
-        dtype (numpy.ndtype, optional): underlying data type of the elements.
-        name (str, optional): name indentifying the tensor (used in printing).
-        persist_values (bool, optional): If set to True (the default), the
-                                         values assigned to this Tensor will
-                                         persist across multiple begin and
-                                         end calls.  Setting to False may
-                                         provide a performance increase if
-                                         values do not need to be maintained
-                                         across such calls
-
-    See also:
-        GPUTensor class, Tensor class
-
-    Notes:
-        Unlike numpy, in this implementation we never collapse dimensions, and
-        the minimal number of dimensions will be _min_dims (currently set to
-        2).  So a wrapped scalar will have dimension 1x1.
-    """
-    def __init__(self,
-                 backend,
-                 shape=None,
-                 dtype=np.float32,
-                 name=None,
-                 persist_values=True):
-
-        self.backend = backend
-        self.shape = shape
-        self.dtype = dtype
-        self.name = name
-        self.persist_values = persist_values
-        self._min_dims = 2
-        self.base = None
-
-
 class Backend(object):
     """
     Backend interface used to manipulate Tensor data. This abstract base class
@@ -91,10 +48,6 @@ class Backend(object):
                  compat_mode=None, deterministic=None):
         # dtype
         self.default_dtype = default_dtype
-
-        # use RandomState instead of seed
-#        self.rng_seed = rng_seed
-#        self.rng = self.gen_rng(rng_seed)
 
         # batch size
         self.bsz = None
@@ -149,72 +102,6 @@ class Backend(object):
 
     def check_caffe_compat(self):
         return self.compat_mode == 'caffe'
-
-    def iobuf(self, dim0, x=None, dtype=None, name=None, persist_values=True,
-              shared=None, parallelism=None):
-        """
-        Allocate input and output buffer for layer based on batch size. This
-        is used because the layer does not know about the batch size.
-
-        Arguments:
-            dim0 (tuple or int): I/O buffer dimension for layer (without the
-                                 axis specifying the batch size).
-            x (data-type, optional): If present and not None, `x` will be
-                                     returned directly. `x` will be not None if
-                                     the buffer has already been allocated.
-            dtype (data-type, optional): If present, specifies the underlying
-                                         type to employ for each element.
-            name (str, optional): name indentifying the tensor (used in printing).
-            persist_values (bool, optional): If set to True (the default), the
-                                             values assigned to this Tensor will
-                                             persist across multiple begin and
-                                             end calls.  Setting to False may
-                                             provide a performance increase if
-                                             values do not need to be maintained
-                                             across such calls
-            shared (buffer, optional): If present will attempt to reuse the memory
-                                       in shared to allocate the I/O buffer
-            parallelism (str, optional): Indicates type of parallelism (Data,
-                                         Model) employed by this buffer.
-                                         Ignored on CPU and GPU backends,
-                                         defaults to no parallelism.
-        Returns:
-            Tensor: array object
-        """
-        if x is not None:
-            return x
-        if isinstance(dim0, tuple):
-            if (len(dim0) == 2):
-                bufshape = (dim0[0], dim0[1] * self.bsz)
-            else:
-                bufshape = (np.prod(dim0), self.bsz)
-        else:
-            bufshape = (dim0, self.bsz)
-
-        if shared is not None:
-            out_tsr = shared if shared.shape == bufshape else shared.share(bufshape)
-        else:
-            out_tsr = self.empty(bufshape, dtype=dtype, name=name, persist_values=persist_values)
-
-        if persist_values and shared is None:
-            out_tsr[:] = 0
-
-        return out_tsr
-
-    def shared_iobuf_size(self, shape, parallelism):
-        """
-        Computes the backend specific size needed for an iobuf with a specified
-        shape that is meant to be shared between layers.
-
-        Arguments:
-            shape (tuple): Requested iobuf shape
-            parallelism (string): Parallelism of layer requesting this iobuf
-
-        Returns:
-            int: Size of required iobuf
-        """
-        num_dev = 1 if parallelism in ('Data', 'Model') else getattr(self, 'num_dev', 1)
-        return num_dev * np.prod(shape)
 
     def conv_layer(self, dtype,
                    N, C, K,

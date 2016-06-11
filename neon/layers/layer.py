@@ -16,9 +16,6 @@ import logging
 import numpy as np
 
 from neon import NervanaObject
-#from neon.backends import Autodiff
-from neon.backends.backend import Tensor
-#from neon.util.persist import load_class
 
 
 logger = logging.getLogger(__name__)
@@ -101,31 +98,7 @@ class Layer(NervanaObject):
                 self.parallelism = in_obj.parallelism
         else:
             self.prev_layer = None
-            if isinstance(in_obj, (tuple, int, list)):
-                self.in_shape = in_obj  # input is a shape tuple or int directly
-            elif isinstance(in_obj, Tensor):
-                self.in_shape = (in_obj.shape[0], in_obj.shape[1] / self.be.bsz)
-            else:
-                self.in_shape = in_obj.shape  # This is a dataset
-
-    def allocate(self, shared_outputs=None):
-        """
-        Allocates output buffer to store activations from fprop.
-        Don't reallocate if it already exists.
-        Only allocate space if layer owns its own output (i.e. bias, activation work in-place,
-        so do not own their output).
-        outputs can be allocated from a pre-allocated pool if shared_outputs is provided
-
-        Arguments:
-            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
-                                               computed into
-
-        """
-        if self.outputs:
-            return
-        if self.owns_output:
-            self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs,
-                                         parallelism=self.parallelism)
+            self.in_shape = in_obj  # input is a shape tuple or int directly
 
     def set_deltas(self, delta_buffers):
         """
@@ -275,14 +248,6 @@ class ParameterLayer(Layer):
             init = icls(**pdict['init']['config'])
             pdict['init'] = init
         return cls(**pdict)
-
-    def allocate(self, shared_outputs=None):
-        super(ParameterLayer, self).allocate(shared_outputs)
-        if self.W is None:
-            self.init_params(self.weight_shape)
-        if self.batch_sum_shape is not None:
-            self.batch_sum = self.be.empty(self.batch_sum_shape, dtype=np.float32,
-                                           **self.get_param_attrs())
 
     def init_params(self, shape):
         """
