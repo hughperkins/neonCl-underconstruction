@@ -92,7 +92,6 @@ def simple1():
 
     conv = Convolution((3, 3, output_filters), strides=1, padding=1) #, init=init)
     print('created conv')
-    conv.W = W_cuda
 
     conv.configure((input_filters,image_size, image_size))
     conv.W = W_cuda

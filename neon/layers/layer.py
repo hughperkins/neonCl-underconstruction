@@ -12,27 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import logging
 import numpy as np
-
 from neon import NervanaObject
-
-
-logger = logging.getLogger(__name__)
-
-
-def interpret_in_shape(xshape):
-    """
-    Helper function to interpret the tensor layout of preceding layer to handle non-recurrent,
-    recurrent, and local layers
-    """
-    if isinstance(xshape, int):
-        return (xshape, 1)
-    else:
-        if len(xshape) == 2:
-            return xshape
-        else:
-            return (np.prod(xshape), 1)
 
 
 class Layer(NervanaObject):
@@ -48,7 +29,7 @@ class Layer(NervanaObject):
             distributed backends (see gen_backend for details).
     """
 
-    def __init__(self, name=None, parallelism="Unknown"):
+    def __init__(self, name=None):
         super(Layer, self).__init__(name)
         self.outputs = None
         self.has_params = False
@@ -56,28 +37,7 @@ class Layer(NervanaObject):
         self.owns_output = True
         self.owns_delta = False
         self.deltas = None
-        self.parallelism = parallelism
-        self.revert_list = []
-        self.next_layer = None
         self.actual_bsz = None
-        self.actual_seq_len = None
-
-    def __str__(self):
-        """
-        Format the layer as a printable string.
-        """
-        ret = '{} {}'.format(self.classnm, self.name)
-        return ret
-
-    def nested_str(self, level=0):
-        """
-        Utility function for displaying layer info with a given indentation level
-
-        Arguments:
-            level (int, optional): indentation level
-        """
-
-        return "  " * level + str(self)
 
     def configure(self, in_obj):
         """
@@ -124,9 +84,6 @@ class Layer(NervanaObject):
         else:
             self.deltas = None
 
-    def set_next(self, layer):
-        self.next_layer = layer
-
     def fprop(self, inputs, inference=False):
         """
         Apply the forward pass transformation to the input data.
@@ -167,52 +124,6 @@ class Layer(NervanaObject):
         """
         raise NotImplementedError
 
-    def get_terminal(self):
-        """
-        Used for recursively getting final nodes from layer containers
-        """
-        return self
-
-    def serialize(self):
-        """
-        Get state parameters for this layer
-
-        Returns:
-            ?: whatever data this model wants to receive in order to restore state
-        """
-        if self.has_params:
-            return self.get_params()
-
-    def load_weights(self, pdict, load_states=True):
-        self.set_params(pdict)
-        if load_states:
-            self.set_states(pdict)
-
-    def get_param_attrs(self):
-        return dict(parallel=(self.parallelism in ("Data", "Model")),
-                    distributed=(self.parallelism == "Model"))
-
-    def set_params(self, pdict):
-        pass
-
-    def set_states(self, pdict):
-        pass
-
-    def set_batch_size(self, N):
-        self.actual_bsz = N
-
-    def set_seq_len(self, S):
-        self.actual_seq_len = S
-
-    def get_description(self, **kwargs):
-        """
-        Get layer parameters. All parameters are needed for optimization, but
-        only Weights are serialized.
-
-        Arguments:
-        """
-        return super(Layer, self).get_description(**kwargs)
-
 
 class ParameterLayer(Layer):
 
@@ -227,9 +138,8 @@ class ParameterLayer(Layer):
         name (str, optional): layer name. Defaults to "ParameterLayer"
     """
 
-    def __init__(self, init=None, name=None,
-                 parallelism="Unknown"):
-        super(ParameterLayer, self).__init__(name, parallelism)
+    def __init__(self, init=None, name=None):
+        super(ParameterLayer, self).__init__(name=name)
         self.has_params = True
         self.init = init
         self.W = None
@@ -248,91 +158,6 @@ class ParameterLayer(Layer):
             init = icls(**pdict['init']['config'])
             pdict['init'] = init
         return cls(**pdict)
-
-    def init_params(self, shape):
-        """
-        Allocate layer parameter buffers and initialize them with the
-            supplied initializer.
-
-        Arguments:
-            shape (int, tuple): shape to allocate for layer parameter
-                buffers.
-        """
-        self.W = self.be.empty(shape, **self.get_param_attrs())
-        self.dW = self.be.empty_like(self.W)
-        self.states = []
-
-        if isinstance(self.init, Tensor) or isinstance(self.init, np.ndarray):
-            assert self.init.shape == self.W.shape, "Initial weights shape does not match"
-            self.W[:] = self.init
-        else:
-            self.init.fill(self.W)
-
-    def get_params(self):
-        """
-        Get layer parameters, gradients, and states for optimization
-        """
-        return ((self.W, self.dW), self.states)
-
-    def get_params_serialize(self, keep_states=True):
-        return self.get_description(get_weights=True, keep_states=keep_states)
-
-    def get_description(self, get_weights=False, keep_states=True):
-        """
-        Get layer parameters. All parameters are needed for optimization, but
-        only Weights are serialized.
-
-        Arguments:
-            keep_states (bool): Control whether all parameters are returned
-                or just weights for serialization. Defaults to True.
-        """
-        serial_dict = super(ParameterLayer, self).get_description()
-        if get_weights:
-            serial_dict['params'] = {'W': self.W.get()}
-            if keep_states:
-                serial_dict['states'] = [s.get() for s in self.states]
-        return serial_dict
-
-    def set_params(self, pdict):
-        """
-        Set layer parameters (weights). Allocate space for other parameters but do not initialize
-        them.
-
-        Arguments:
-            pdict (dict, ndarray): dictionary or ndarray with layer parameters
-                                   [support for ndarray is DEPRECATED and will be removed]
-        """
-        assert type(pdict) is dict
-        for key in pdict['params']:
-            if not hasattr(self, key):
-                setattr(self, key, None)
-
-            attr = getattr(self, key)
-            if isinstance(attr, Tensor):
-                # this attr has already been allocated
-                # get set the values
-                attr.set(pdict['params'][key])
-            elif type(pdict['params'][key]) is np.ndarray:
-                setattr(self, key, self.be.array(pdict['params'][key], **self.get_param_attrs()))
-            else:
-                setattr(self, key, pdict['params'][key])
-
-        if self.dW is None:
-            self.dW = self.be.empty_like(self.W)
-
-    def set_states(self, pdict):
-        if 'states' not in pdict:
-            # if states was not serialized then leave
-            # this empty, the optimizer will initialize it
-            self.states = []
-        else:
-            # this needs to be done in two steps for MGPU backend
-            if self.states is None or len(self.states) == 0:
-                self.states = [self.be.zeros_like(self.dW)
-                               for i in range(len(pdict['states']))]
-
-            for ind in range(len(pdict['states'])):
-                self.states[ind].set(pdict['states'][ind])
 
 
 class Convolution(ParameterLayer):
@@ -356,8 +181,8 @@ class Convolution(ParameterLayer):
     """
 
     def __init__(self, fshape, strides={}, padding={}, init=None, bsum=False,
-                 name=None, parallelism="Data"):
-        super(Convolution, self).__init__(init, name, parallelism)
+                 name=None):
+        super(Convolution, self).__init__(init, name)
         self.nglayer = None
         bsum = bsum and not self.be.deterministic
         self.convparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
@@ -379,22 +204,6 @@ class Convolution(ParameterLayer):
             padding = {'pad_h': padding, 'pad_w': padding}
         for d in [fshape, strides, padding]:
             self.convparams.update(d)
-
-    def __str__(self):
-        spatial_dim = len(self.in_shape[1:])
-        spatial_str = "%d x (" + "x".join(("%d",) * spatial_dim) + ")"
-        padstr_str = ",".join(("%d",) * spatial_dim)
-        padstr_dim = ([] if spatial_dim == 2 else ['d']) + ['h', 'w']
-
-        pad_tuple = tuple(self.convparams[k] for k in ['pad_' + d for d in padstr_dim])
-        str_tuple = tuple(self.convparams[k] for k in ['str_' + d for d in padstr_dim])
-
-        fmt_tuple = (self.name,) + self.in_shape + self.out_shape + pad_tuple + str_tuple
-        fmt_string = "Convolution Layer '%s': " + \
-                     spatial_str + " inputs, " + spatial_str + " outputs, " + \
-                     padstr_str + " padding, " + padstr_str + " stride"
-
-        return ((fmt_string % fmt_tuple))
 
     def configure(self, in_obj):
         super(Convolution, self).configure(in_obj)
