@@ -82,10 +82,6 @@ class NervanaGPU(Backend):
         self.device_id = device_id if device_id is not None else 0
         self.ctx = drv.Device(device_id).make_context()
 
-        # store the rand pool for each context
-        self.context_rand_state_map = {}  # stores gpu memory reference
-        self.context_rand_state_alive = {}  # set whether randstate is fresh
-
         # super class init
         super(NervanaGPU, self).__init__(default_dtype,
                                          compat_mode=compat_mode,
