@@ -54,15 +54,15 @@ class ClRunner(object):
         str_w, str_h, pad_w, pad_h, HWN, KRST, PQN,
         PQ, zeroa, zerob, magic_PQ, shift_PQ, magic_Q, shift_Q, magic_S, shift_S,
         *args, shared_size):
-        print('grid', grid, 'block', block, 'stream', stream, 'alpha', alpha, 'beta', beta,
-              'Igpudata', Igpudata, 'Fgpudata', Fgpudata,
-              'Ogpudata', Ogpudata, 'bsum_gpudata', bsum_gpudata)
-        print('C', C, 'D', D, 'H', H, 'W', W, 'N', N, 'T', T, 'R', R, 'S', S, 'K', K, 'M', M, 'P', P, 'Q', Q)
-        print('str_w', str_w, 'str_h', str_h, 'pad_w', pad_w, 'pad_h', pad_h, 'HWN', HWN, 'KRST', KRST, 'PQN', PQN)
-        print('PQ', PQ, 'zeroa', zeroa, 'zerob', zerob)
-        print('magic_PQ', magic_PQ, 'shift_PQ', shift_PQ, 'magic_Q', magic_Q, 'shift_Q', shift_Q)
-        print('magic_S', magic_S, 'shift_S', shift_S)
-        print('args', *args, 'shared_size', shared_size)
+#        print('grid', grid, 'block', block, 'stream', stream, 'alpha', alpha, 'beta', beta,
+#              'Igpudata', Igpudata, 'Fgpudata', Fgpudata,
+#              'Ogpudata', Ogpudata, 'bsum_gpudata', bsum_gpudata)
+#        print('C', C, 'D', D, 'H', H, 'W', W, 'N', N, 'T', T, 'R', R, 'S', S, 'K', K, 'M', M, 'P', P, 'Q', Q)
+#        print('str_w', str_w, 'str_h', str_h, 'pad_w', pad_w, 'pad_h', pad_h, 'HWN', HWN, 'KRST', KRST, 'PQN', PQN)
+#        print('PQ', PQ, 'zeroa', zeroa, 'zerob', zerob)
+#        print('magic_PQ', magic_PQ, 'shift_PQ', shift_PQ, 'magic_Q', magic_Q, 'shift_Q', shift_Q)
+#        print('magic_S', magic_S, 'shift_S', shift_S)
+#        print('args', *args, 'shared_size', shared_size)
 #        print('cuda_buffer', cuda_buffer)
 #         cpu_buffer = np.zeros(
 #        cpu_buffer = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=a)
@@ -87,12 +87,12 @@ class ClRunner(object):
         q.finish()
 
         blockDim = len(block)
-        print('blockDim', blockDim)
+#        print('blockDim', blockDim)
         if blockDim == 3:
             globalSize = (block[0] * grid[0], block[1] * grid[1], block[2] * grid[2])  # hacky? what do you mean? :-P
         else:
             raise Exception('not implemented')
-        print('globalSize', globalSize)
+#        print('globalSize', globalSize)
         
 #        outSize = H*W*K*N
 #        assert outSize < pow(2, 30)

@@ -87,8 +87,8 @@ class FpropCuda(KernelGroup):
         PQN = PQ * N
         self.clRunner = ClRunner(dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=bsum, operation="fprop")
-        self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
-                                       bsum=bsum, operation="fprop")
+#        self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
+#                                       bsum=bsum, operation="fprop")
         grid = (PQ * (-(-N // 32)), (-(-K // 32)), 1)
         block = (8, 8, 1)
         static_kernel_args = _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
@@ -108,11 +108,11 @@ class FpropCuda(KernelGroup):
                                  I.gpudata, F.gpudata, O.gpudata, bsum_gpudata)
 
     def execute(self, repeat=1, unbind=True):
-        print('repeat', repeat)
+#        print('repeat', repeat)
         for r in range(repeat):
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
-            print('calling kernel', self.kernel, 'args', self.launch_args, 'shared_size', self.shared)
+#            print('calling kernel', self.kernel, 'args', self.launch_args, 'shared_size', self.shared)
 #            self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
             self.clRunner.execute(*self.launch_args, shared_size=self.shared)
         if unbind:
