@@ -100,6 +100,7 @@ def simple1():
         outputs_cuda = MyTensor.from_np(outputs)
         conv.outputs = outputs_cuda
         conv.fprop(inputs_cuda)
+        cuda.Context.synchronize()
 
         for it in range(3):
             start = time.time()
@@ -151,6 +152,7 @@ def one():
         outputs_cuda = MyTensor.from_np(outputs)
         conv.outputs = outputs_cuda
         conv.fprop(inputs_cuda)
+        cuda.Context.synchronize()
         for it in range(3):
           start = time.time()
           conv.fprop(inputs_cuda)
