@@ -5,7 +5,7 @@ import pycuda.driver as cuda
 import pycuda.autoinit
 import time
 
-from neon.layers import Convolution
+from neon.layers.layer import Convolution
 from neon.backends import gen_backend
 
 
