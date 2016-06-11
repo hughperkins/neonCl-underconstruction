@@ -1,7 +1,8 @@
 from pycuda.compiler import SourceModule
 from pycuda.tools import context_dependent_memoize
 from neon.backends.cuda_templates import _ew_types
-from neon.backends.layer_gpu import _magic64
+#from neon.backends.layer_gpu import magic64
+from neon.backends.util.math_helper import magic64
 
 """
 CUDA kernels for convolutional layers. This code will return one of 3 kernels:
@@ -602,7 +603,7 @@ __global__ void conv_%(operation)s(
     else:
         code = header_code + code
 
-    magic = _magic64(filter_size)
+    magic = magic64(filter_size)
 
     code = code % {
         "filter_size":          filter_size,

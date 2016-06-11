@@ -18,6 +18,8 @@ Python code to wrap convolution kernels
 import numpy as np
 import pycuda.driver as drv
 import sys
+from neon.backends.util.math_helper import magic64, magic32, ceil_div
+from neon.backends.kernels.cuda.convolution import _get_conv_kernel
 
 
 if sys.version_info >= (3, 0):
@@ -73,15 +75,14 @@ class FpropCuda(KernelGroup):
         assert N % 32 == 0, "N dim must be multiple of 32"
         assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
 
-        magic_PQ = _magic64(P*Q)
-        magic_Q = _magic64(Q)
-        magic_S = _magic32(R*S+32, S)
+        magic_PQ = magic64(P*Q)
+        magic_Q = magic64(Q)
+        magic_S = magic32(R*S+32, S)
         HWN = H * W * N
         RST = R * S * T
         KRST = K * RST
         PQ = P * Q
         PQN = PQ * N
-        from neon.backends.kernels.cuda.convolution import _get_conv_kernel
         self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=bsum, operation="fprop")
         grid = (PQ * (-(-N // 32)), (-(-K // 32)), 1)
@@ -106,6 +107,7 @@ class FpropCuda(KernelGroup):
         for r in range(repeat):
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
+            print('calling kernel', self.kernel)
             self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
         if unbind:
             self.bsum_zero = None
@@ -130,10 +132,10 @@ class BpropCuda(KernelGroup):
         assert N % 32 == 0, "N dim must be multiple of 32"
         assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
 
-        magic_HW = _magic64(H*W)
-        magic_W = _magic64(W)
-        magic_RS = _magic32(R*S*T+32, R*S)
-        magic_S = _magic32(R*S+32, S)
+        magic_HW = magic64(H*W)
+        magic_W = magic64(W)
+        magic_RS = magic32(R*S*T+32, R*S)
+        magic_S = magic32(R*S+32, S)
         HW = H * W
         HWN = HW * N
         RST = R * S * T
@@ -142,7 +144,6 @@ class BpropCuda(KernelGroup):
         PQN = PQ * N
 
         self.bsum = bsum
-        from neon.backends.kernels.cuda.convolution import _get_conv_kernel
         self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=bsum, operation="bprop")
         grid = (HW * (-(-N // 32)), -(-C // 32), 1)
@@ -158,7 +159,7 @@ class BpropCuda(KernelGroup):
         self.flags = (bsum and 4)
 
         # generate the kernel args for dim shuffling CTRSK => KTRSC
-        shuffle_grid = (_ceil_div(K, 32), _ceil_div(C, 32), R*S*T)
+        shuffle_grid = (ceil_div(K, 32), ceil_div(C, 32), R*S*T)
         self.shuffle_size = C*T*R*S*K*dtype.itemsize
         self.shuffle_args = [shuffle_grid, (32, 8, 1), None, None, None]
         self.shuffle_args.extend(_flatten([
@@ -222,7 +223,7 @@ class UpdateCuda(KernelGroup):
         CRSTK = KRST * C
         PQ = P * Q
         PQN = PQ * N
-        magic_S = _magic32(R*S+32, S)
+        magic_S = magic32(R*S+32, S)
 
         if lib.deterministic:
             grid_P = 1
@@ -234,10 +235,9 @@ class UpdateCuda(KernelGroup):
             self.determ = 0
 
         pq_blocks = grid_P * grid_Q
-        magic_PQ = _magic64(pq_blocks)
-        magic_Q = _magic64(grid_Q)
+        magic_PQ = magic64(pq_blocks)
+        magic_Q = magic64(grid_Q)
 
-        from neon.backends.kernels.cuda.convolution import _get_conv_kernel
         self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=False, operation="update")
         grid = (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1)
@@ -307,42 +307,8 @@ class UpdateCuda(KernelGroup):
         return "UpdateCuda"
 
 
-# Magic numbers and shift amounts for integer division
-# Suitable for when nmax*magic fits in 32 bits
-# Shamelessly pulled directly from:
-# http://www.hackersdelight.org/hdcodetxt/magicgu.py.txt
-def _magic32(nmax, d):
-    nc = ((nmax + 1) // d) * d - 1
-    nbits = len(bin(nmax)) - 2
-    for p in range(0, 2 * nbits + 1):
-        if 2 ** p > nc * (d - 1 - (2 ** p - 1) % d):
-            m = (2 ** p + d - 1 - (2 ** p - 1) % d) // d
-            return (m, p)
-    raise ValueError("Can't find magic number for division")
-
-
-# Magic numbers and shift amounts for integer division
-# Suitable for when nmax*magic fits in 64 bits and the shift
-# lops off the lower 32 bits
-def _magic64(d):
-    # 3 is a special case that only ends up in the high bits
-    # if the nmax is 0xffffffff
-    # we can't use 0xffffffff for all cases as some return a 33 bit
-    # magic number
-    nmax = 0xffffffff if d == 3 else 0x7fffffff
-    magic, shift = _magic32(nmax, d)
-    if magic != 1:
-        shift -= 32
-    return (magic, shift)
-
-
 # flatten a nested list of lists or values
 def _flatten(lst):
     return sum(([x] if not isinstance(x, (list, tuple))
                 else _flatten(x) for x in lst), [])
-
-
-def _ceil_div(x, y):
-    return -(-x // y)
-
 
