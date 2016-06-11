@@ -74,7 +74,7 @@ class ClRunner(object):
         cuda.Context.synchronize()
         cuda.memcpy_dtoh(I_cpu, Igpudata)
         cuda.memcpy_dtoh(W_cpu, Fgpudata)
-        cuda.Context.synchronize()
+#        cuda.Context.synchronize()
 
         # create cl buffers
         I_cl = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
@@ -84,7 +84,7 @@ class ClRunner(object):
         # create dummy one for bsum for now?
         bsum_cpu = np.zeros((1,), dtype=np.float32)
         bsum_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=bsum_cpu)
-        q.finish()
+#        q.finish()
 
         blockDim = len(block)
 #        print('blockDim', blockDim)
@@ -124,11 +124,11 @@ class ClRunner(object):
         
         # copy the result back...
         # first to cpu...
-        q.finish()
+#        q.finish()
         cl.enqueue_copy(q, O_cpu, O_cl)
-        q.finish()
+#        q.finish()
 
         # then to cuda...
         cuda.memcpy_htod(Ogpudata, O_cpu)
-        cuda.Context.synchronize()
+#        cuda.Context.synchronize()
 
