@@ -17,8 +17,6 @@ It's going to contain a version of neon convolutions ported to OpenCL
 
 This is started at:
 
-https://github.com/hughperkins/winogradCl-underconstruction/blob/a6160f0fce407136e178df32417958a8ba77072a/neon/backends/kernels/cl/convolution_cl.py
-
 ## Status
 
 fprop is working!
