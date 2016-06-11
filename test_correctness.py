@@ -278,5 +278,6 @@ def three():
 
 simple1()
 one()
-three()
+#two()
+#three()
 

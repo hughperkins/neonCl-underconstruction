@@ -104,10 +104,11 @@ class FpropCuda(KernelGroup):
                                  I.gpudata, F.gpudata, O.gpudata, bsum_gpudata)
 
     def execute(self, repeat=1, unbind=True):
+        print('repeat', repeat)
         for r in range(repeat):
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
-            print('calling kernel', self.kernel)
+            print('calling kernel', self.kernel, 'args', self.launch_args, 'shared_size', self.shared)
             self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
         if unbind:
             self.bsum_zero = None
