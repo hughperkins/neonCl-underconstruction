@@ -24,7 +24,6 @@ import pycuda.driver as drv
 from neon.backends import convolution
 from pycuda.tools import context_dependent_memoize
 from operator import mul
-from math import ceil
 import sys
 
 
