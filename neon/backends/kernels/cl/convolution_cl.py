@@ -209,6 +209,9 @@ kernel void conv_%(operation)s(
 
     lut_size_local = lut_size;
     Matrix result[REG_TILE_Y];
+    for(int i = 0 ; i < REG_TILE_Y; i++) { // how to do this quickly in opencl???
+        result[i].f4 = (float4)0.0f;
+    }
     output_pixel = (output_pixel * N) >> 2;
     if(lut_size_local > 0)
     {
@@ -345,6 +348,7 @@ static inline uint ballot(const uint i) {
   uint n;
   asm(
     "{\\n\\t"
+    ".reg .pred %%p<1>;\\n\\t"
     "setp.ne.u32 %%p1, %1, 0;\\n\\t"
     "vote.ballot.b32 %0, %%p1;\\n\\t"
     "}"

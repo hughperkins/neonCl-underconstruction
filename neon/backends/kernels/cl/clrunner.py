@@ -41,6 +41,13 @@ class ClRunner(object):
         self.kernel = convolution_cl._get_conv_kernel(
             ctx=ctx, options='', dtype=self.dtype, filter_size=self.filter_size,
             bsum=self.bsum, operation=self.operation)
+#        self.dummy_kernel = cl.Program(ctx, """
+#kernel void copyStuff(int outSize, global float *in, global float *out) {
+#    if(get_global_id(0) < outSize) {
+#        out[get_global_id(0)] = in[get_global_id(0)];
+#    }
+#}
+#""").build()
 
     def execute(self, grid, block, stream, alpha, beta, Igpudata, Fgpudata, Ogpudata, bsum_gpudata,
         C, D, H, W, N, T, R, S, K, M, P, Q,
@@ -86,6 +93,14 @@ class ClRunner(object):
         else:
             raise Exception('not implemented')
         print('globalSize', globalSize)
+        
+#        outSize = H*W*K*N
+#        assert outSize < pow(2, 30)
+#        print('outSize', outSize)
+#        roundedOutSize = (outSize // 256) * 256
+#        self.dummy_kernel.copyStuff(q, (roundedOutSize,), (256,), np.int32(outSize),
+#            I_cl, O_cl
+#        )
 
         # run the conv ???
         self.kernel.conv_fprop(
@@ -109,6 +124,7 @@ class ClRunner(object):
         
         # copy the result back...
         # first to cpu...
+        q.finish()
         cl.enqueue_copy(q, O_cpu, O_cl)
         q.finish()
 
