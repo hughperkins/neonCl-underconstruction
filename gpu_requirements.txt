@@ -1,3 +1,0 @@
-pycuda>=2015.1
-scikit-cuda==0.5.1
-pytools
