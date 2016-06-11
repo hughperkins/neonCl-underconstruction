@@ -26,7 +26,6 @@ if sys.version_info >= (3, 0):
 
 class KernelGroup(object):
     def __init__(self, lib, dtype):
-
         self.lib = lib
         self.dtype = dtype
         self.dtype_str = dtype.str[1:]
@@ -60,7 +59,6 @@ class KernelGroup(object):
 
 
 class FpropCuda(KernelGroup):
-
     def __init__(self, lib, dtype,
                  N, C, K,
                  D, H, W,
@@ -99,23 +97,16 @@ class FpropCuda(KernelGroup):
         self.flags = (bsum and 4)
 
     def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
-
         assert I.dtype == F.dtype == O.dtype
-
         bsum_gpudata, flags = self.init_bsum(bsum, flags)
-
         self.launch_args[2:9] = (self.lib.stream, alpha, beta,
                                  I.gpudata, F.gpudata, O.gpudata, bsum_gpudata)
 
     def execute(self, repeat=1, unbind=True):
-
         for r in range(repeat):
-
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
-
             self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
-
         if unbind:
             self.bsum_zero = None
             self.launch_args[2:9] = (None,) * 7
@@ -125,7 +116,6 @@ class FpropCuda(KernelGroup):
 
 
 class BpropCuda(KernelGroup):
-
     def __init__(self, lib, dtype,
                  N, C, K,
                  D, H, W,
@@ -179,7 +169,6 @@ class BpropCuda(KernelGroup):
         lib.set_scratch_size(self.shuffle_size)
 
     def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
-
         assert I.dtype == F.dtype == O.dtype
         if self.bsum:
             assert bsum is not None, "must use initialized bsum config"
@@ -199,10 +188,8 @@ class BpropCuda(KernelGroup):
         shuffle_kernel = _get_shuffle_kernel(self.dtype.str[1:])
 
         for r in range(repeat):
-
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
-
             shuffle_kernel.prepared_async_call(*self.shuffle_args)
             self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
 
@@ -216,7 +203,6 @@ class BpropCuda(KernelGroup):
 
 
 class UpdateCuda(KernelGroup):
-
     def __init__(self, lib, dtype,
                  N, C, K,
                  D, H, W,
@@ -266,7 +252,6 @@ class UpdateCuda(KernelGroup):
         lib.set_scratch_size((self.determ or C*T*R*S*K)*4)
 
     def update_grid(self, kernel_name, base_blocks, P, Q, SM_count):
-
         threads = kernel_specs.kernels[kernel_name]["threads"]
         occupancy = kernel_specs.kernels[kernel_name]["occupancy"]
 
@@ -292,13 +277,9 @@ class UpdateCuda(KernelGroup):
         return (grid[0][0], grid[0][1], threads)
 
     def bind_params(self, I, E, O, alpha):
-
         assert I.dtype == E.dtype
-
         if O.dtype.type is not np.float32:
-
             update_temp = self.lib.scratch_buffer((self.determ or O.size)*4)
-
             self.convert_args = [update_temp, "f4", O, False]
         else:
             update_temp = O.gpudata
@@ -312,13 +293,9 @@ class UpdateCuda(KernelGroup):
                                  I.gpudata, E.gpudata, O.gpudata, bsum_gpudata)
 
     def execute(self, repeat=1, unbind=True):
-
         for r in range(repeat):
-
             drv.memset_d32_async(*self.zero_args)
-
             self.kernel.prepared_async_call(*self.launch_args)
-
             if self.convert_args:
                 _fp_convert(*self.convert_args)
 
