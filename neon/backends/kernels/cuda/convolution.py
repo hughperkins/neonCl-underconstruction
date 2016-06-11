@@ -43,6 +43,8 @@ def _get_conv_kernel(dtype, filter_size, bsum, operation, filter_bounds_check=Fa
             not a multiple of 32.
         debug (boolean): When set to true, kernels will be compiled with debug symbols.
     """
+    print('_get_conv_kernel dtype', dtype, 'filter_size', filter_size, 'bsum', bsum, 'operation', operation,
+        'filter_bounds_check', filter_bounds_check, 'debug', debug)
     assert operation in ["fprop", "bprop", "update"]
     if operation == "fprop" or operation == "update":
         lut_code = r"""
