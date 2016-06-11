@@ -19,8 +19,10 @@ def printDims(W, I):
     kW = W.shape[2]
     print('Ci', Ci, 'iH', iH, 'iW', iW, 'Co', Co, 'kH', kH, 'kW', kW)
 
+def check_gradInputs(O, I, W, gradOutputs, c, h, w, n):
+    pass
+
 def check(O, W, I, c, h, w, n, eps=1e-4):
-#    eps = 1e6 # hack for now ...
     Ci = W.shape[0]
     iH = I.shape[1]
     iW = I.shape[2]
@@ -102,6 +104,7 @@ def simple1():
         # we probably should do fprop first
         conv.outputs = outputs_cuda
         conv.fprop(inputs_cuda)
+        outputs_cuda.to_host()
 
         gradOutputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
         gradOutputs_cuda = MyTensor.from_np(gradOutputs)
@@ -130,6 +133,9 @@ def simple1():
 
     #    outputs = outputs_cuda.get()
         gradInputs_cuda.to_host()
+        gradW_cuda.to_host()
+        check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, c=0, h=0, w=0, n=0)
+        
 #        printDims(W=W, I=gradInputs)
 #        check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0)
 #        check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1)
@@ -138,7 +144,7 @@ def simple1():
 #        check(W=W, I=inputs, O=outputs, c=1, h=0, w=0, n=0)
 #        check(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27)
 
-        print('outputs.shape', outputs.shape)
+#        print('outputs.shape', outputs.shape)
 
 def one():
     image_size = 64
