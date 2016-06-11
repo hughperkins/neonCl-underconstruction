@@ -1,17 +1,13 @@
 from __future__ import print_function
-from neon.layers import Convolution
-#from neon.initializers import Gaussian
-from neon.backends import gen_backend
+
 import numpy as np
 import pycuda.driver as cuda
 import pycuda.autoinit
-import pycuda.gpuarray as gpuarray
 import time
 
+from neon.layers import Convolution
+from neon.backends import gen_backend
 
-
-
-#init = Gaussian()
 
 def printDims(W, I):
     Ci = W.shape[0]
@@ -51,6 +47,28 @@ def check(O, W, I, c, h, w, n):
     assert abs(sum - gpu_value) < 1e-4
     return ""
 
+class MyTensor(object):
+    def __init__(self, gpudata, shape, size):
+        self.gpudata = gpudata
+        self.size = size
+        self.dtype = np.float32
+        self.cpudata = None
+        self.shape = shape
+
+    @staticmethod
+    def from_np(np_data):
+        cudabuf = cuda.mem_alloc(np_data.nbytes)
+        cuda.memcpy_htod(cudabuf, np_data)
+#        self.cpudata = np_data
+        tensor = MyTensor(cudabuf, shape=np_data.shape, size=np_data.size)
+        tensor.cpudata = np_data
+        return tensor
+
+    def to_host(self):
+        if self.cpudata is None:
+            raise Exception('not implemented')
+        cuda.memcpy_dtoh(self.cpudata, self.gpudata)
+
 def simple1():
     image_size = 3
     batch_size = 32
@@ -63,16 +81,12 @@ def simple1():
             datatype=np.float32, device_id=0)
 
     W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
-    W_cuda = gpuarray.to_gpu(W)
-
-    print('type(W_cuda)', type(W_cuda))
-
-    #conv.W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
-
-    #inputs = np.zeros((batch_size,image_size, image_size,input_filters), dtype=np.float32)
+    print('W.shape', W.shape)
+    W_cuda = MyTensor.from_np(W)
+    
     inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
     inputs[:] = np.random.randn(*inputs.shape)
-    inputs_cuda = gpuarray.to_gpu(inputs)
+    inputs_cuda = MyTensor.from_np(inputs)
 
     print('type(inputs_cuda)', type(inputs_cuda))
 
@@ -83,13 +97,8 @@ def simple1():
     conv.configure((input_filters,image_size, image_size))
     conv.W = W_cuda
     print('configure done')
-    #conv.allocate()
-    #print('conv.outputs.shape', conv.outputs.shape)
-    #print('type(conv.outputs)', type(conv.outputs))
-    #print('type(conv.outputs.gpudata)', type(conv.outputs.gpudata))
-    #print('allocate done')
     outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
-    outputs_cuda = gpuarray.to_gpu(outputs)
+    outputs_cuda = MyTensor.from_np(outputs)
     conv.outputs = outputs_cuda
     conv.fprop(inputs_cuda)
     
@@ -99,10 +108,8 @@ def simple1():
         cuda.Context.synchronize()
         print('time=', time.time() - start)
 
-    outputs = outputs_cuda.get()
-#    print(outputs)
-#    print(outputs[:,0])
-
+#    outputs = outputs_cuda.get()
+    outputs_cuda.to_host()
     printDims(W=W, I=inputs)
     check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0)
     check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1)
@@ -125,16 +132,13 @@ def one():
             datatype=np.float32, device_id=0)
 
     W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
-    W_cuda = gpuarray.to_gpu(W)
+    W_cuda = MyTensor.from_np(W)
 
     print('type(W_cuda)', type(W_cuda))
 
-    #conv.W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
-
-    #inputs = np.zeros((batch_size,image_size, image_size,input_filters), dtype=np.float32)
     inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
     inputs[:] = np.random.randn(*inputs.shape)
-    inputs_cuda = gpuarray.to_gpu(inputs)
+    inputs_cuda = MyTensor.from_np(inputs)
 
     print('type(inputs_cuda)', type(inputs_cuda))
 
@@ -145,13 +149,8 @@ def one():
     conv.configure((input_filters,image_size, image_size))
     conv.W = W_cuda
     print('configure done')
-    #conv.allocate()
-    #print('conv.outputs.shape', conv.outputs.shape)
-    #print('type(conv.outputs)', type(conv.outputs))
-    #print('type(conv.outputs.gpudata)', type(conv.outputs.gpudata))
-    #print('allocate done')
     outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
-    outputs_cuda = gpuarray.to_gpu(outputs)
+    outputs_cuda = MyTensor.from_np(outputs)
     conv.outputs = outputs_cuda
     conv.fprop(inputs_cuda)
     for it in range(3):
@@ -160,14 +159,8 @@ def one():
       cuda.Context.synchronize()
       print('time=', time.time() - start)
 
-
 #    outputs = outputs_cuda.get()
-
-#    assert abs(outputs[1,1] - 1.33960593) < 1e-4
-#    assert abs(outputs[1,2] + 6.06682396) < 1e-4
-#    assert abs(outputs[2,2] - 8.76905346) < 1e-4
-
-    outputs = outputs_cuda.get()
+    outputs_cuda.to_host()
     print(outputs[1:3,1:3])
     print('outputs.shape', outputs.shape)
     printDims(W=W, I=inputs)
