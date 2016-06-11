@@ -1,3 +1,4 @@
+from __future__ import print_function
 from neon.layers import Convolution
 #from neon.initializers import Gaussian
 from neon.backends import gen_backend
@@ -12,7 +13,7 @@ import time
 
 #init = Gaussian()
 
-def calc(O, W, I, c, h, w, n):
+def printDims(W, I):
     Ci = W.shape[0]
     iH = I.shape[1]
     iW = I.shape[2]
@@ -20,7 +21,15 @@ def calc(O, W, I, c, h, w, n):
     kH = W.shape[1]
     kW = W.shape[2]
     print('Ci', Ci, 'iH', iH, 'iW', iW, 'Co', Co, 'kH', kH, 'kW', kW)
-    print('c', c, 'h', h, 'w', w, 'n', n)
+
+def check(O, W, I, c, h, w, n):
+    Ci = W.shape[0]
+    iH = I.shape[1]
+    iW = I.shape[2]
+    Co = W.shape[3]
+    kH = W.shape[1]
+    kW = W.shape[2]
+#    print('Ci', Ci, 'iH', iH, 'iW', iW, 'Co', Co, 'kH', kH, 'kW', kW)
     
     co = c
     padw = 1
@@ -38,7 +47,7 @@ def calc(O, W, I, c, h, w, n):
                     v = I[ci, ih, iw, n] * W[ci, kh, kw, co]
                     sum += v
     gpu_value = O[c*iH*iW + h*iW + w,n]
-    print('cpu %.6f gpu %.6f' % (sum, gpu_value))
+    print('c', c, 'h', h, 'w', w, 'n', n, 'cpu %.6f gpu %.6f' % (sum, gpu_value))
     assert abs(sum - gpu_value) < 1e-4
     return ""
 
@@ -91,15 +100,16 @@ def simple1():
         print('time=', time.time() - start)
 
     outputs = outputs_cuda.get()
-    print(outputs)
-    print(outputs[:,0])
+#    print(outputs)
+#    print(outputs[:,0])
 
-    print(calc(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0))
-    print(calc(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1))
-    print(calc(W=W, I=inputs, O=outputs, c=0, h=1, w=0, n=0))
-    print(calc(W=W, I=inputs, O=outputs, c=0, h=0, w=1, n=0))
-    print(calc(W=W, I=inputs, O=outputs, c=1, h=0, w=0, n=0))
-    print(calc(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27))
+    printDims(W=W, I=inputs)
+    check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0)
+    check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1)
+    check(W=W, I=inputs, O=outputs, c=0, h=1, w=0, n=0)
+    check(W=W, I=inputs, O=outputs, c=0, h=0, w=1, n=0)
+    check(W=W, I=inputs, O=outputs, c=1, h=0, w=0, n=0)
+    check(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27)
 
     print('outputs.shape', outputs.shape)
 
@@ -160,13 +170,14 @@ def one():
     outputs = outputs_cuda.get()
     print(outputs[1:3,1:3])
     print('outputs.shape', outputs.shape)
-    print(calc(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0))
-    print(calc(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1))
-    print(calc(W=W, I=inputs, O=outputs, c=0, h=0, w=1, n=0))
-    print(calc(W=W, I=inputs, O=outputs, c=0, h=1, w=0, n=0))
-    print(calc(W=W, I=inputs, O=outputs, c=1, h=0, w=0, n=0))
-    print(calc(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27))
-    print(calc(W=W, I=inputs, O=outputs, c=17, h=25, w=7, n=27))
+    printDims(W=W, I=inputs)
+    check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0)
+    check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1)
+    check(W=W, I=inputs, O=outputs, c=0, h=0, w=1, n=0)
+    check(W=W, I=inputs, O=outputs, c=0, h=1, w=0, n=0)
+    check(W=W, I=inputs, O=outputs, c=1, h=0, w=0, n=0)
+    check(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27)
+    check(W=W, I=inputs, O=outputs, c=17, h=25, w=7, n=27)
 
 simple1()
 one()
