@@ -113,7 +113,7 @@ class FpropCuda(KernelGroup):
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
             print('calling kernel', self.kernel, 'args', self.launch_args, 'shared_size', self.shared)
-            self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
+#            self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
             self.clRunner.execute(*self.launch_args, shared_size=self.shared)
         if unbind:
             self.bsum_zero = None
