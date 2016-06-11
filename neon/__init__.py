@@ -23,27 +23,6 @@ except ImportError:
     print("ERROR: Version information not found.  Ensure you have built "
           "the software.\n    From the top level dir issue: 'make'")
     sys.exit(1)
-from copy import deepcopy
-import inspect
-import logging
-
-# setup a preliminary stream based logger
-logging.basicConfig(level=logging.ERROR)
-logger = logging.getLogger(__name__)
-
-def get_args(func):
-    """
-    returns a dictionary of arg_name:default_values for the input function
-    """
-    args, varargs, keywords, defaults = inspect.getargspec(func)
-
-    defaults = list(reversed(defaults)) if defaults is not None else []
-    args = list(reversed(args))
-
-    while len(defaults) != len(args):
-        defaults+=(None,)
-
-    return dict(zip(args, defaults))
 
 
 class NervanaObject(object):
@@ -81,39 +60,3 @@ class NervanaObject(object):
         """
         return self.__class__.__name__
 
-    @property
-    def modulenm(self):
-        """
-        Convenience method for getting the full module path
-        """
-        return self.__class__.__module__ + '.' + self.__class__.__name__
-
-    def get_description(self, skip=[], **kwargs):
-        if type(skip) is not list:
-            skip = list(skip)
-        else:
-            skip = deepcopy(skip)
-        skip.append('self')
-
-        config = {}
-        defaults = get_args(self.__init__)
-        for arg in defaults:
-            if arg in skip:
-                continue
-
-            # all args need to go in the __dict__ so we can read
-            # them out the way they were read in. alternatively,
-            # you can override get_description to say how to
-            # put them in to the description dictionary.
-            if arg in self.__dict__:
-                if self.__dict__[arg] != defaults[arg]:
-                    if isinstance(self.__dict__[arg], NervanaObject):
-                        config[arg] = self.__dict__[arg].get_description()
-                    else:
-                        config[arg] = self.__dict__[arg]
-            else:
-                logger.warning("can't describe argument '{}' to {}".format(arg, self))
-
-        desc = {'type': self.modulenm, 'config': config}
-        self._desc = desc
-        return desc
