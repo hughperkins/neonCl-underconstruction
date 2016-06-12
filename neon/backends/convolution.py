@@ -195,17 +195,11 @@ class BpropCuda(KernelGroup):
     def execute(self, repeat=1, unbind=True):
         C = self.shuffle_args[12]
         assert C >= 4, "C dim must be 4 or greater for CUDA C backprop kernel"
-
-        shuffle_kernel = _get_shuffle_kernel(self.dtype.str[1:])
-
         for r in range(repeat):
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
-#            shuffle_kernel.prepared_async_call(*self.shuffle_args)
             self.shuffleRunner.execute(*self.shuffle_args)
-#            self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
             self.clRunner.execute_bprop(*self.launch_args, shared_size=self.shared)
-
         if unbind:
             self.bsum_zero = None
             self.shuffle_args[2:5] = (None,) * 3
@@ -325,63 +319,4 @@ class UpdateCuda(KernelGroup):
 def _flatten(lst):
     return sum(([x] if not isinstance(x, (list, tuple))
                 else _flatten(x) for x in lst), [])
-
-@context_dependent_memoize
-def _get_shuffle_kernel(dtype):
-
-    _shuffle_kernel = r"""
-__global__ void dimShuffle(
-    %(type)s* out, const %(type)s* in,
-    int TRSK, int RSK, int SK, int K,
-    int TRSC, int RSC, int SC, int C,
-    int RS, int T, int R, int S,
-    int magic_RS, int shift_RS,
-    int magic_S,  int shift_S)
-{
-    __shared__ %(type)s tile[32][33];
-
-    int tx  = threadIdx.x;
-    int ty  = threadIdx.y;
-    int bk  = blockIdx.x;
-    int bc  = blockIdx.y;
-    int trs = blockIdx.z;
-
-    int k  = bk * 32 + tx;
-    int c  = bc * 32 + ty;
-
-    int t  = magic_RS * trs; t >>= shift_RS;
-    int rs = trs - t*RS;
-
-    int r = magic_S * rs; r >>= shift_S;
-    int s = rs - r*S;
-
-    for (int j = 0; j < 32; j += 8)
-    {
-        int cj = c + j;
-        if (cj < C && k < K)
-            tile[ty + j][tx] = in[ cj*TRSK + t*RSK + r*SK + s*K + k ];
-    }
-    __syncthreads();
-
-    k = bk * 32 + ty;
-    c = bc * 32 + tx;
-
-    // Mirror RST
-    s = S - s - 1;
-    r = R - r - 1;
-    t = T - t - 1;
-
-    for (int i = 0; i < 32; i += 8)
-    {
-        int ki = k + i;
-        if (ki < K && c < C)
-            out[ ki*TRSC + t*RSC + r*SC + s*C + c ] = tile[tx][ty + i];
-    }
-}
-"""
-    code = _shuffle_kernel % _ew_types[dtype]
-    module = SourceModule(code)
-    kernel = module.get_function("dimShuffle")
-    kernel.prepare("PPIIIIIIIIIIIIIIII")
-    return kernel
 
