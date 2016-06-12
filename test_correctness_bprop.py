@@ -148,7 +148,7 @@ def process(image_size, batch_size, input_filters, output_filters):
         outputs_cuda.to_host()
 
         gradOutputs = np.random.randn(image_size * image_size * output_filters, batch_size).astype(np.float32)
-        gradOutputs_cuda = MyTensor.from_np(gradOutputs)
+        gradOutputs_cuda = MyClTensor.from_np(be, gradOutputs)
 
 #        print('type(inputs_cuda)', type(inputs_cuda))
 

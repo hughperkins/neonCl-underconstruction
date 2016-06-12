@@ -169,41 +169,31 @@ class ClRunner(object):
 #        cuda.memcpy_htod(O_gpudata, O_cpu)
 
     def execute_bprop(self, grid, block, stream, alpha, beta, 
-            gradO_gpudata,
+            gradO_cl,
             Wt_gpudata,
             gradI_gpudata,
             bsum_gpudata,            
             K, M, P, Q, N, T, R, S, C, D, H, W,
             *args, shared_size):
-#            str_w, str_h, pad_w, pad_h,
-#            PQN, CRST, HWN,
-#            HW, zeroa, zerob,
-#            magic_HW, shift_HW, magic_W, shift_W, magic_S, shift_S, shared_size):
 
         print('len(args)', len(args))
 
-        gradO_cpu = np.zeros((C, H, W, N), dtype=np.float32)
+#        gradO_cpu = np.zeros((C, H, W, N), dtype=np.float32)
         Wt_cpu = np.zeros((K * R * S * C,), dtype=np.float32)
         gradI_cpu = np.zeros((H * W * K, N), dtype=np.float32)
 
         # copy I and W from cuda to cpu
-        cuda.memcpy_dtoh(gradO_cpu, gradO_gpudata)
+#        cuda.memcpy_dtoh(gradO_cpu, gradO_gpudata)
         cuda.memcpy_dtoh(Wt_cpu, Wt_gpudata)
 
         # create cl buffers
-        gradO_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradO_cpu)
+#        gradO_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradO_cpu)
         Wt_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=Wt_cpu)
         gradI_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=gradI_cpu)
 
         # create dummy one for bsum for now?
         bsum_cpu = np.zeros((1,), dtype=np.float32)
         bsum_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=bsum_cpu)
-
-#        blockDim = len(block)
-#        if blockDim == 3:
-#            globalSize = (block[0] * grid[0], block[1] * grid[1], block[2] * grid[2])  # hacky? what do you mean? :-P
-#        else:
-#            raise Exception('not implemented')
 
         call_cl_kernel(self.kernel.conv_bprop,
             self.q, grid, block,
@@ -216,28 +206,6 @@ class ClRunner(object):
             *args
         )
 
-
-#        q.finish()
-#        start = time.time()
-#        self.kernel.conv_bprop(
-#            q,
-#            globalSize, block,
-#                           np.float32(alpha), np.float32(beta),
-#                           gradO_cl,
-#                           Wt_cl,
-#                           gradI_cl,
-#                           bsum_cl,
-#                           
-#                           np.int32(K), np.int32(M), np.int32(P), np.int32(Q), np.int32(N), np.int32(T), np.int32(R), np.int32(S), np.int32(C), np.int32(D), np.int32(H), np.int32(W),
-#                           np.int32(str_w), np.int32(str_h), np.int32(pad_w), np.int32(pad_h),
-#                           np.int32(PQN), np.int32(CRST), np.int32(HWN),
-#                           np.int32(HW), np.int32(zeroa), np.int32(zerob),
-#                           
-#                           np.uint32(magic_HW), np.uint32(shift_HW), np.uint32(magic_W), np.uint32(shift_W), np.uint32(magic_S), np.uint32(shift_S)
-#        )
-#        q.finish()
-#        end = time.time()
-#        print('kernel wallclock time', (end-start))
         cl.enqueue_copy(self.q, gradI_cpu, gradI_cl)
 
         # then to cuda...
@@ -246,7 +214,7 @@ class ClRunner(object):
     def execute_update(
             self, grid, block, stream, alpha, beta,
             I_cl,
-            gradO_gpudata,
+            gradO_cl,
             gradW_gpudata,
             bsum_gpudata,
             C, D, H, W, N, T, R, S, K, M, P, Q,
@@ -259,11 +227,11 @@ class ClRunner(object):
 
         # cuda => cpu
 #        cuda.memcpy_dtoh(I_cpu, I_gpudata)
-        cuda.memcpy_dtoh(gradO_cpu, gradO_gpudata)
+#        cuda.memcpy_dtoh(gradO_cpu, gradO_gpudata)
 
         # cpu => cl
 #        I_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
-        gradO_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradO_cpu)
+#        gradO_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradO_cpu)
         gradW_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=gradW_cpu)
 
         # create dummy one for bsum for now?
