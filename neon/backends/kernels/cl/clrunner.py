@@ -27,7 +27,6 @@ but it'll at least show the cl fprop is/isnt working
 import time
 import numpy as np
 import pyopencl as cl
-import pycuda.driver as cuda
 from neon.backends.cuda_templates import _ew_types
 from neon.backends.kernels.cl import convolution_cl
 

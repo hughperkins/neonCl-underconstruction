@@ -132,7 +132,7 @@ class NervanaGPU(Backend):
 #        self.hist_base = drv.mem_alloc(self.hist_bins * self.hist_max * 4)
 #        drv.memset_d32(self.hist_base, 0, self.hist_bins * self.hist_max)
 
-        self.compute_capability = (4,0)
+#        self.compute_capability = (4,0)
         self.use_cudac_kernels = True
 
         self.enable_winograd = enable_winograd
@@ -150,7 +150,6 @@ class NervanaGPU(Backend):
 
         self.scratch_offset = size
 
-#        return int(_get_scratch_data(self.scratch_size))
         return self.scratch
 
     def set_scratch_size(self, *args):

@@ -106,12 +106,9 @@ class FpropCuda(KernelGroup):
                                  I.gpudata, F.gpudata, O.gpudata, bsum_gpudata)
 
     def execute(self, repeat=1, unbind=True):
-#        print('repeat', repeat)
         for r in range(repeat):
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
-#            print('calling kernel', self.kernel, 'args', self.launch_args, 'shared_size', self.shared)
-#            self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
             self.clRunner.execute_fprop(*self.launch_args, shared_size=self.shared)
         if unbind:
             self.bsum_zero = None
@@ -148,8 +145,6 @@ class BpropCuda(KernelGroup):
         PQN = PQ * N
 
         self.bsum = bsum
-#        self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
-#                                       bsum=bsum, operation="bprop")
         self.clRunner = ClRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=bsum, operation="bprop")
         grid = (HW * (-(-N // 32)), -(-C // 32), 1)
@@ -241,8 +236,6 @@ class UpdateCuda(KernelGroup):
         magic_PQ = magic64(pq_blocks)
         magic_Q = magic64(grid_Q)
 
-#        self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
-#                                       bsum=False, operation="update")
         self.clRunner = ClRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=False, operation="update")
         grid = (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1)
