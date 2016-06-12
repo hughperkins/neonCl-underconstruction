@@ -4,6 +4,35 @@ This is a port of nervana neon Kepler convolution kernels to OpenCL.
 
 The original neon, documentation etc is at https://github.com/nervanasystems/neon
 
+## Performance
+
+Preliminary results:
+
+For geometry:
+- image_size: 224 x 224
+- batch_size: 128
+- input_filters: 32
+- output_filters: 32
+
+...times for forward propagation, on a Titan X, are:
+- nervana neon, Maxwell kernels, CUDA (SOTA): 0.025 seconds
+- nervana neon, Kepler kernels, CUDA: 0.036 seconds
+- nervana neon, OpenCL (this): 0.041 seconds
+
+## Installation
+
+```
+git clone https://github.com/hughperkins/winogradCl-underconstruction winogradCl
+cd winogradCl
+sudo apt-get install python3 python3-dev opencl-headers python-virtualenv
+virtualenv -p python3 env3
+source env3/bin/activate
+pip install -U pip
+pip install -U setuptools
+pip install -U wheel
+pip install -r requirements.txt
+```
+
 ## Correctness tests
 
 Test code is at:
