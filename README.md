@@ -8,14 +8,13 @@ The original neon, documentation etc is at https://github.com/nervanasystems/neo
 ## How to run something with it?
 
 Test code is at:
-- [test_perf.py](test_perf.py)
-- [test_correctness.py](test_correctness.py)
+- [test_perf.py](test_perf.py)  For timings
+- [test_correctness.py](test_correctness.py)   For fprop correctness
+- [test_correctness_bprop.py](test_correctness_bprop.py)    For gradInput backprop correctness
 
 ## Plan
 
-It's going to contain a version of neon convolutions ported to OpenCL
-
-This is started at:
+It's a port of neon convolutions to OpenCL (in progress)
 
 ## Status
 
