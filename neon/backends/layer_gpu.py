@@ -20,9 +20,7 @@ TODO: remove any non-param caching code, neon layers should replace benchmark co
 """
 import logging
 import numpy as np
-import pycuda.driver as drv
 from neon.backends import convolution
-from pycuda.tools import context_dependent_memoize
 from operator import mul
 import sys
 
@@ -141,7 +139,3 @@ def _flatten(lst):
     return sum(([x] if not isinstance(x, (list, tuple))
                 else _flatten(x) for x in lst), [])
 
-@context_dependent_memoize
-def _get_sm_count():
-    attributes = drv.Context.get_device().get_attributes()
-    return attributes[drv.device_attribute.MULTIPROCESSOR_COUNT]

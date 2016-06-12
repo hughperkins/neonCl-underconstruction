@@ -23,7 +23,7 @@ import pyopencl as cl
 import logging
 
 from neon.backends.backend import Backend
-from neon.backends.layer_gpu import ConvLayer, _get_sm_count
+from neon.backends.layer_gpu import ConvLayer
 
 _none_slice = slice(None, None, None)
 
