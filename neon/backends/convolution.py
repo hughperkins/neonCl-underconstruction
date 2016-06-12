@@ -179,18 +179,18 @@ class BpropCuda(KernelGroup):
         lib.set_scratch_size(self.shuffle_size)
         self.shuffleRunner = ShuffleRunner(self.dtype)
 
-    def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
-        assert I.dtype == F.dtype == O.dtype
+    def bind_params(self, gradO, W, gradI, alpha, beta, bsum, flags=0):
+        assert gradO.dtype == W.dtype == gradI.dtype
         if self.bsum:
             assert bsum is not None, "must use initialized bsum config"
 
         bsum_gpudata, flags = self.init_bsum(bsum, flags)
 
-        filter_temp = self.lib.scratch_buffer(self.shuffle_size)
+        Wt = self.lib.scratch_buffer(self.shuffle_size)
 
-        self.shuffle_args[2:5] = (self.lib.stream, filter_temp, F.gpudata)
+        self.shuffle_args[2:5] = (self.lib.stream, Wt, W.gpudata)
         self.launch_args[2:9] = (self.lib.stream, alpha, beta,
-                                 I.gpudata, filter_temp, O.gpudata, bsum_gpudata)
+                                 gradO.gpudata, Wt, gradI.gpudata, bsum_gpudata)
 
     def execute(self, repeat=1, unbind=True):
         C = self.shuffle_args[12]
@@ -252,6 +252,8 @@ class UpdateCuda(KernelGroup):
 
         self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=False, operation="update")
+        self.clRunner = ClRunner(dtype=self.dtype.str[1:], filter_size=R*S,
+                                       bsum=False, operation="update")
         grid = (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1)
         block = (8, 32, 1)
         static_kernel_args = _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
@@ -288,26 +290,27 @@ class UpdateCuda(KernelGroup):
 
         return (grid[0][0], grid[0][1], threads)
 
-    def bind_params(self, I, E, O, alpha):
-        assert I.dtype == E.dtype
-        if O.dtype is not np.float32:
-            update_temp = self.lib.scratch_buffer((self.determ or O.size)*4)
-            self.convert_args = [update_temp, "f4", O, False]
+    def bind_params(self, I, gradO, gradW, alpha):
+        assert I.dtype == gradO.dtype
+        if gradW.dtype is not np.float32:
+            update_temp = self.lib.scratch_buffer((self.determ or gradW.size)*4)
+            self.convert_args = [update_temp, "f4", gradW, False]
         else:
-            update_temp = O.gpudata
+            update_temp = gradW.gpudata
             self.convert_args = False
 
-        self.zero_args = [update_temp, 0, O.size, self.lib.stream]
+        self.zero_args = [update_temp, 0, gradW.size, self.lib.stream]
 
         beta = 0.0
         bsum_gpudata = 0
         self.launch_args[2:9] = (self.lib.stream, alpha, beta,
-                                 I.gpudata, E.gpudata, O.gpudata, bsum_gpudata)
+                                 I.gpudata, gradO.gpudata, gradW.gpudata, bsum_gpudata)
 
     def execute(self, repeat=1, unbind=True):
         for r in range(repeat):
             drv.memset_d32_async(*self.zero_args)
             self.kernel.prepared_async_call(*self.launch_args)
+            self.clRunner.execute_update(*self.launch_args)
             if self.convert_args:
                 _fp_convert(*self.convert_args)
 

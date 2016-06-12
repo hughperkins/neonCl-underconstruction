@@ -212,6 +212,12 @@ static inline void _idiv_magic32(int numerator, unsigned int magic, unsigned int
 //get_group_id(1) is gemm tile id (N dimension)
 //get_local_id(0) is gemm tile offset (K dimension)
 //get_local_id(1) is gemm tile offset (N dimension)
+
+// note that the I,F,O here are identical across all operations
+// and therefore are not actually the I,F,O of the conv layer
+// but the I,F,O of this specific kernel run
+// for example, when backpropping to get gradI,
+// then 'O' here will actually represent 'gradI'
 kernel void conv_%(operation)s(
                            %(type)s alpha, %(type)s beta,
                            global Matrix *I,

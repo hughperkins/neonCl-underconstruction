@@ -200,22 +200,21 @@ class NervanaGPU(Backend):
 
         return self._execute_conv("fprop", layer, layer.fprop_kernels, repeat)
 
-    def bprop_conv(self, layer, F, E, grad_I, alpha=1.0, beta=0.0, bsum=None, repeat=1):
-        assert layer.sizeF == F.size
-        assert layer.sizeO == E.size
-        assert layer.sizeI == grad_I.size
+    def bprop_conv(self, layer, gradO, W, gradI, alpha=1.0, beta=0.0, bsum=None, repeat=1):
+        assert layer.sizeO == gradO.size
+        assert layer.sizeF == W.size
+        assert layer.sizeI == gradI.size
 
-        layer.bprop_kernels.bind_params(E, F, grad_I, alpha, beta, bsum)
+        layer.bprop_kernels.bind_params(gradO, W, gradI, alpha, beta, bsum)
 
         return self._execute_conv("bprop", layer, layer.bprop_kernels, repeat)
 
-    def update_conv(self, layer, I, E, grad_F, alpha=1.0, repeat=1):
+    def update_conv(self, layer, I, gradO, gradW, alpha=1.0, repeat=1):
         assert layer.sizeI == I.size
-        assert layer.sizeO == E.size
-        print('grad_F', grad_F)
-        assert layer.sizeF == grad_F.size
+        assert layer.sizeO == gradO.size
+        assert layer.sizeF == gradW.size
 
-        layer.updat_kernels.bind_params(I, E, grad_F, alpha)
+        layer.updat_kernels.bind_params(I, gradO, gradW, alpha)
 
         return self._execute_conv("updat", layer, layer.updat_kernels, repeat)
 
