@@ -49,7 +49,7 @@ class ClRunner(object):
 #}
 #""").build()
 
-    def execute(self, grid, block, stream, alpha, beta, Igpudata, Fgpudata, Ogpudata, bsum_gpudata,
+    def execute_fprop(self, grid, block, stream, alpha, beta, Igpudata, Fgpudata, Ogpudata, bsum_gpudata,
         C, D, H, W, N, T, R, S, K, M, P, Q,
         str_w, str_h, pad_w, pad_h, HWN, KRST, PQN,
         PQ, zeroa, zerob, magic_PQ, shift_PQ, magic_Q, shift_Q, magic_S, shift_S,
@@ -145,6 +145,89 @@ class ClRunner(object):
         
         # copy the result back...
         # first to cpu...
+        q.finish()
+        end = time.time()
+        print('kernel wallclock time', (end-start))
+        cl.enqueue_copy(q, O_cpu, O_cl)
+#        q.finish()
+
+        # then to cuda...
+        cuda.memcpy_htod(Ogpudata, O_cpu)
+#        cuda.Context.synchronize()
+
+    def execute_bprop(self, grid, block, stream, alpha, beta, Igpudata, filtertemp_gpudata, Ogpudata, bsum_gpudata,
+        K, M, P, Q, N, T, R, S, C, D, H, W,
+             str_w, str_h, pad_w, pad_h,
+             PQN, CRST, HWN,
+             HW, zeroa, zerob,
+             magic_HW, shift_HW, magic_W, shift_W, magic_S, shift_S,
+        *args, shared_size):
+#        print('grid', grid, 'block', block, 'stream', stream, 'alpha', alpha, 'beta', beta,
+#              'Igpudata', Igpudata, 'Fgpudata', Fgpudata,
+#              'Ogpudata', Ogpudata, 'bsum_gpudata', bsum_gpudata)
+#        print('C', C, 'D', D, 'H', H, 'W', W, 'N', N, 'T', T, 'R', R, 'S', S, 'K', K, 'M', M, 'P', P, 'Q', Q)
+#        print('str_w', str_w, 'str_h', str_h, 'pad_w', pad_w, 'pad_h', pad_h, 'HWN', HWN, 'KRST', KRST, 'PQN', PQN)
+#        print('PQ', PQ, 'zeroa', zeroa, 'zerob', zerob)
+#        print('magic_PQ', magic_PQ, 'shift_PQ', shift_PQ, 'magic_Q', magic_Q, 'shift_Q', shift_Q)
+#        print('magic_S', magic_S, 'shift_S', shift_S)
+        print('args', *args, 'shared_size', shared_size)
+#        print('cuda_buffer', cuda_buffer)
+#         cpu_buffer = np.zeros(
+#        cpu_buffer = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=a)
+        I_cpu = np.zeros((C, H, W, N), dtype=np.float32)
+        filtertemp_cpu = np.zeros((K * R * S * C,), dtype=np.float32)
+        O_cpu = np.zeros((H * W * K, N), dtype=np.float32)
+        
+        # copy I and W from cuda to cpu
+        cuda.Context.synchronize()
+        cuda.memcpy_dtoh(I_cpu, Igpudata)
+        cuda.memcpy_dtoh(filtertemp_cpu, filtertemp_gpudata)
+#        cuda.Context.synchronize()
+
+        # create cl buffers
+        I_cl = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
+        filtertemp_cl = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=filtertemp_cpu)
+        O_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=O_cpu)
+
+        # create dummy one for bsum for now?
+        bsum_cpu = np.zeros((1,), dtype=np.float32)
+        bsum_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=bsum_cpu)
+#        q.finish()
+
+        blockDim = len(block)
+#        print('blockDim', blockDim)
+        if blockDim == 3:
+            globalSize = (block[0] * grid[0], block[1] * grid[1], block[2] * grid[2])  # hacky? what do you mean? :-P
+        else:
+            raise Exception('not implemented')
+#        print('globalSize', globalSize)
+        
+#        outSize = H*W*K*N
+#        assert outSize < pow(2, 30)
+#        print('outSize', outSize)
+#        roundedOutSize = (outSize // 256) * 256
+#        self.dummy_kernel.copyStuff(q, (roundedOutSize,), (256,), np.int32(outSize),
+#            I_cl, O_cl
+#        )
+
+        q.finish()
+        start = time.time()
+        self.kernel.conv_bprop(
+            q,
+            globalSize, block,
+                           np.float32(alpha), np.float32(beta),
+                           I_cl,
+                           filtertemp_cl,
+                           O_cl,
+                           bsum_cl,
+                           
+                           np.int32(K), np.int32(M), np.int32(P), np.int32(Q), np.int32(N), np.int32(T), np.int32(R), np.int32(S), np.int32(C), np.int32(D), np.int32(H), np.int32(W),
+                           np.int32(str_w), np.int32(str_h), np.int32(pad_w), np.int32(pad_h),
+                           np.int32(PQN), np.int32(CRST), np.int32(HWN),
+                           np.int32(HW), np.int32(zeroa), np.int32(zerob),
+                           
+                           np.uint32(magic_HW), np.uint32(shift_HW), np.uint32(magic_W), np.uint32(shift_W), np.uint32(magic_S), np.uint32(shift_S)
+        )
         q.finish()
         end = time.time()
         print('kernel wallclock time', (end-start))
