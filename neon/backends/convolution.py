@@ -201,7 +201,8 @@ class BpropCuda(KernelGroup):
         for r in range(repeat):
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
-            shuffle_kernel.prepared_async_call(*self.shuffle_args)
+#            shuffle_kernel.prepared_async_call(*self.shuffle_args)
+            self.shuffleRunner.execute(*self.shuffle_args)
 #            self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
             self.clRunner.execute_bprop(*self.launch_args, shared_size=self.shared)
 
