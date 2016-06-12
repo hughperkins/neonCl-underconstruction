@@ -23,7 +23,7 @@ Latest news:
 - most inputs are now opencl buffers :-)
 
 Next steps, in no particular order:
-- migrate gradW to be an opencl buffer at input
+- migrate Wt to be an opencl buffer
 - create api method to do the convolutions (or three, ie forward, gradInput, gradWeights)
 - run some performance benchmarks
 

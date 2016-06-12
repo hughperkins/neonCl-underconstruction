@@ -85,8 +85,6 @@ class NervanaGPU(Backend):
         self.ctx = drv.Device(device_id).make_context()
 
         # cl context
-#        gpu_idx = 0  # hardcode this for now...
-
         platforms = cl.get_platforms()
         i = 0
         for platform in platforms:
@@ -132,8 +130,8 @@ class NervanaGPU(Backend):
         self.hist_map = dict()
         self.hist_idx = 0
         self.hist_max = 4*4096
-        self.hist_base = drv.mem_alloc(self.hist_bins * self.hist_max * 4)
-        drv.memset_d32(self.hist_base, 0, self.hist_bins * self.hist_max)
+#        self.hist_base = drv.mem_alloc(self.hist_bins * self.hist_max * 4)
+#        drv.memset_d32(self.hist_base, 0, self.hist_bins * self.hist_max)
 
         self.compute_capability = (4,0)
         self.use_cudac_kernels = True
