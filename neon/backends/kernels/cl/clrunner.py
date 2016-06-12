@@ -28,6 +28,7 @@ import time
 import numpy as np
 import pyopencl as cl
 import pycuda.driver as cuda
+from neon.backends.cuda_templates import _ew_types
 from neon.backends.kernels.cl import convolution_cl
 
 gpu_idx = 0  # hardcode this for now...
@@ -45,6 +46,13 @@ print('context', ctx)
 #ctx = cl.create_some_context()
 q = cl.CommandQueue(ctx)
 mf = cl.mem_flags
+
+class ShuffleRunner(object):
+    def __init__(self, dtype):
+        self.shuffle_kernel_cl = _get_shuffle_kernel_cl(dtype.str[1:])
+        
+    def execute(self):
+        pass
 
 class ClRunner(object):
     def __init__(self, dtype, filter_size, bsum, operation):
@@ -251,4 +259,63 @@ class ClRunner(object):
         # then to cuda...
         cuda.memcpy_htod(Ogpudata, O_cpu)
 #        cuda.Context.synchronize()
+
+def _get_shuffle_kernel_cl(dtype):
+    _shuffle_kernel = r"""
+kernel void dimShuffle(
+    global %(type)s* out, global const %(type)s* in,
+    int TRSK, int RSK, int SK, int K,
+    int TRSC, int RSC, int SC, int C,
+    int RS, int T, int R, int S,
+    int magic_RS, int shift_RS,
+    int magic_S,  int shift_S)
+{
+    local %(type)s tile[32][33];
+
+    int tx  = get_local_id(0);
+    int ty  = get_local_id(1);
+    int bk  = get_group_id(0);
+    int bc  = get_group_id(1);
+    int trs = get_group_id(2);
+
+    int k  = bk * 32 + tx;
+    int c  = bc * 32 + ty;
+
+    int t  = magic_RS * trs; t >>= shift_RS;
+    int rs = trs - t*RS;
+
+    int r = magic_S * rs; r >>= shift_S;
+    int s = rs - r*S;
+
+    for (int j = 0; j < 32; j += 8)
+    {
+        int cj = c + j;
+        if (cj < C && k < K)
+            tile[ty + j][tx] = in[ cj*TRSK + t*RSK + r*SK + s*K + k ];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    k = bk * 32 + ty;
+    c = bc * 32 + tx;
+
+    // Mirror RST
+    s = S - s - 1;
+    r = R - r - 1;
+    t = T - t - 1;
+
+    for (int i = 0; i < 32; i += 8)
+    {
+        int ki = k + i;
+        if (ki < K && c < C)
+            out[ ki*TRSC + t*RSC + r*SC + s*C + c ] = tile[tx][ty + i];
+    }
+}
+"""
+    code = _shuffle_kernel % _ew_types[dtype]
+    module = cl.Program(ctx, code).build()
+    return module
+#    module = SourceModule(code)
+#    kernel = module.get_function("dimShuffle")
+#    kernel.prepare("PPIIIIIIIIIIIIIIII")
+#    return kernel
 
