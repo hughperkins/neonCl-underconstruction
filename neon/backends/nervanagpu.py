@@ -21,7 +21,7 @@ import sys
 import numpy as np
 import pycuda.driver as drv
 import pyopencl as cl
-from pycuda.tools import context_dependent_memoize
+#from pycuda.tools import context_dependent_memoize
 import logging
 
 from neon.backends.backend import Backend
@@ -31,6 +31,7 @@ _none_slice = slice(None, None, None)
 
 logger = logging.getLogger(__name__)
 
+mf = cl.mem_flags
 
 class NervanaGPU(Backend):
     """
@@ -151,7 +152,8 @@ class NervanaGPU(Backend):
 
         self.scratch_offset = size
 
-        return int(_get_scratch_data(self.scratch_size))
+#        return int(_get_scratch_data(self.scratch_size))
+        return self.scratch
 
     def set_scratch_size(self, *args):
         total_size = 0
@@ -162,6 +164,8 @@ class NervanaGPU(Backend):
 
         if total_size > self.scratch_size:
             self.scratch_size = total_size
+            self.scratch_cpu = np.zeros((total_size/4,), dtype=np.float32)
+            self.scratch = cl.Buffer(self.cl_ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=self.scratch_cpu)
 
     def execute(self, optree):
         """
@@ -260,9 +264,9 @@ class NervanaGPU(Backend):
             return msecs, gflops
         return 0, 0
 
-@context_dependent_memoize
-def _get_scratch_data(scratch_size):
-    return drv.mem_alloc(scratch_size)
+#@context_dependent_memoize
+#def _get_scratch_data(scratch_size):
+#    return drv.mem_alloc(scratch_size)
 
 # debugging tool
 # import re

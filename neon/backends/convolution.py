@@ -301,8 +301,6 @@ class UpdateCuda(KernelGroup):
 
     def execute(self, repeat=1, unbind=True):
         for r in range(repeat):
-            # TODO: what is this???
-#            drv.memset_d32_async(*self.zero_args)
             cl.enqueue_fill_buffer(self.lib.q, self.zero_args[0], np.float32(0), 0, self.zero_args[2] * 4)
             self.clRunner.execute_update(*self.launch_args)
             if self.convert_args:
