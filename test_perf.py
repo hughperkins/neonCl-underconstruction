@@ -3,7 +3,8 @@ from neon.backends.make_backend import make_backend
 import numpy as np
 import pycuda.driver as cuda
 #import pycuda.autoinit
-import pycuda.gpuarray as gpuarray
+#import pycuda.gpuarray as gpuarray
+from mycltensor import MyClTensor
 import time
 
 image_size = 64
@@ -18,21 +19,22 @@ with make_backend(batch_size=batch_size,
     conv = Convolution((3, 3, output_filters), strides=1, padding=1, be=be)
     print('created conv')
     W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
-    W_cuda = gpuarray.to_gpu(W)
+    W_cuda = MyClTensor.from_np(be, W)
     conv.W = W_cuda
 
     print('type(W_cuda)', type(W_cuda))
 
     inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
     inputs[:] = np.random.randn(*inputs.shape)
-    inputs_cuda = gpuarray.to_gpu(inputs)
+#    inputs_cuda = gpuarray.to_gpu(inputs)
+    inputs_cuda = MyClTensor.from_np(be, inputs)
 
     print('type(inputs_cuda)', type(inputs_cuda))
 
     conv.configure((input_filters,image_size, image_size))
     print('configure done')
     outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
-    outputs_cuda = gpuarray.to_gpu(outputs)
+    outputs_cuda = MyClTensor.from_np(be, outputs)
     conv.outputs = outputs_cuda
     conv.fprop(inputs_cuda)
     for it in range(3):
@@ -43,7 +45,7 @@ with make_backend(batch_size=batch_size,
       print('time=', time.time() - start)
 
 
-    outputs = outputs_cuda.get()
+    outputs_cuda.to_host()
     print(outputs[1:3,1:3])
 
     assert abs(outputs[1,1] - 1.33960593) < 1e-4
