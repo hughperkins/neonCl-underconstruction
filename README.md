@@ -10,6 +10,7 @@ Test code is at:
 - [test_perf.py](test_perf.py)  For timings
 - [test_correctness.py](test_correctness.py)   For fprop correctness
 - [test_correctness_bprop.py](test_correctness_bprop.py)    For gradInput backprop correctness
+- [test_correctness_gradweights.py](test_correctness_gradweights.py)    For gradW backprop correctness
 
 ## Status
 
