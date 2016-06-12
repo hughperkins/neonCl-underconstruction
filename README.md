@@ -1,10 +1,10 @@
 # What's this branch?
 
-This is a port in progress of nervana neon Kepler convolution kernels to OpenCL.
+This is a port of nervana neon Kepler convolution kernels to OpenCL.
 
 The original neon, documentation etc is at https://github.com/nervanasystems/neon
 
-## How to run something with it?
+## Correctness tests
 
 Test code is at:
 - [test_perf.py](test_perf.py)  For timings
@@ -14,13 +14,12 @@ Test code is at:
 
 ## Status
 
-Latest news:
-- fprop, bprop, update all ported to OpenCL, and working
-- pycuda entirely removed from neon :-)
+Working :-)
 
-Next steps, in no particular order:
-- create api method to do the convolutions (or three, ie forward, gradInput, gradWeights)
-- run some performance benchmarks
+Next up:
+- create simple API
+- run performance test
+- add to cltorch
 
 ## Implementation notes
 

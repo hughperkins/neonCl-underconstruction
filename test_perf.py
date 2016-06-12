@@ -1,9 +1,6 @@
 from neon.layers.layer import Convolution
 from neon.backends.make_backend import make_backend
 import numpy as np
-#import pycuda.driver as cuda
-#import pycuda.autoinit
-#import pycuda.gpuarray as gpuarray
 from mycltensor import MyClTensor
 import time
 
@@ -19,33 +16,33 @@ with make_backend(batch_size=batch_size,
     conv = Convolution((3, 3, output_filters), strides=1, padding=1, be=be)
     print('created conv')
     W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
-    W_cuda = MyClTensor.from_np(be, W)
-    conv.W = W_cuda
+    W_cl = MyClTensor.from_np(be, W)
+    conv.W = W_cl
 
-    print('type(W_cuda)', type(W_cuda))
+    print('type(W_cl)', type(W_cl))
 
     inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
     inputs[:] = np.random.randn(*inputs.shape)
-#    inputs_cuda = gpuarray.to_gpu(inputs)
-    inputs_cuda = MyClTensor.from_np(be, inputs)
+#    inputs_cl = gpuarray.to_gpu(inputs)
+    inputs_cl = MyClTensor.from_np(be, inputs)
 
-    print('type(inputs_cuda)', type(inputs_cuda))
+    print('type(inputs_cl)', type(inputs_cl))
 
     conv.configure((input_filters,image_size, image_size))
     print('configure done')
     outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
-    outputs_cuda = MyClTensor.from_np(be, outputs)
-    conv.outputs = outputs_cuda
-    conv.fprop(inputs_cuda)
+    outputs_cl = MyClTensor.from_np(be, outputs)
+    conv.outputs = outputs_cl
+    conv.fprop(inputs_cl)
     for it in range(3):
       start = time.time()
       for i in range(10):
-        conv.fprop(inputs_cuda)
-      cuda.Context.synchronize()
+        conv.fprop(inputs_cl)
+#      cuda.Context.synchronize()
       print('time=', time.time() - start)
 
 
-    outputs_cuda.to_host()
+    outputs_cl.to_host()
     print(outputs[1:3,1:3])
     print('outputs.shape', outputs.shape)
 

@@ -163,49 +163,49 @@ def process(image_size, batch_size, input_filters, output_filters):
 
         W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
         print('W.shape', W.shape)
-        W_cuda = MyClTensor.from_np(be, W)
+        W_cl = MyClTensor.from_np(be, W)
 
         inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
         inputs[:] = np.random.randn(*inputs.shape)
-        inputs_cuda = MyClTensor.from_np(be, inputs)
+        inputs_cl = MyClTensor.from_np(be, inputs)
 
         outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
-        outputs_cuda = MyClTensor.from_np(be, outputs)
+        outputs_cl = MyClTensor.from_np(be, outputs)
 
         conv = Convolution((3, 3, output_filters), strides=1, padding=1, be=be) #, init=init)
         print('created conv')
 
         conv.configure((input_filters,image_size, image_size))
-        conv.W = W_cuda
+        conv.W = W_cl
         print('configure done')
         # we probably should do fprop first
-        conv.outputs = outputs_cuda
+        conv.outputs = outputs_cl
         
-        conv.fprop(inputs_cuda)
-        outputs_cuda.to_host()
+        conv.fprop(inputs_cl)
+        outputs_cl.to_host()
 
         gradOutputs = np.random.randn(image_size * image_size * output_filters, batch_size).astype(np.float32)
-        gradOutputs_cuda = MyClTensor.from_np(be, gradOutputs)
+        gradOutputs_cl = MyClTensor.from_np(be, gradOutputs)
 
-#        print('type(inputs_cuda)', type(inputs_cuda))
+#        print('type(inputs_cl)', type(inputs_cl))
 
         gradInputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
 #        gradInputs[:] = np.random.randn(*gradInputs.shape)
-        gradInputs_cuda = MyClTensor.from_np(be, gradInputs)
+        gradInputs_cl = MyClTensor.from_np(be, gradInputs)
 
         gradW = np.zeros((input_filters,3,3,output_filters), dtype=np.float32)
-        gradW_cuda = MyClTensor.from_np(be, gradW)
+        gradW_cl = MyClTensor.from_np(be, gradW)
         
-        conv.deltas = gradInputs_cuda
-        conv.dW = gradW_cuda
+        conv.deltas = gradInputs_cl
+        conv.dW = gradW_cl
 
-        print('gradOutputs_cuda', gradOutputs_cuda)
-        conv.bprop(gradOutputs_cuda)
+        print('gradOutputs_cl', gradOutputs_cl)
+        conv.bprop(gradOutputs_cl)
 #        cuda.Context.synchronize()
 
-    #    outputs = outputs_cuda.get()
-        gradInputs_cuda.to_host()
-        gradW_cuda.to_host()
+    #    outputs = outputs_cl.get()
+        gradInputs_cl.to_host()
+        gradW_cl.to_host()
         return {
             'gradInputs': gradInputs, 'gradOutputs': gradOutputs, 'W': W,
             'gradW': gradW, 'outputs': outputs, 'inputs': inputs}

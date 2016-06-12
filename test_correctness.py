@@ -56,33 +56,33 @@ def process(image_size, batch_size, input_filters, output_filters):
 
         W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
         print('W.shape', W.shape)
-        W_cuda = MyClTensor.from_np(be, W)
+        W_cl = MyClTensor.from_np(be, W)
 
         inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
         inputs[:] = np.random.randn(*inputs.shape)
-        inputs_cuda = MyClTensor.from_np(be, inputs)
+        inputs_cl = MyClTensor.from_np(be, inputs)
 
-        print('type(inputs_cuda)', type(inputs_cuda))
+        print('type(inputs_cl)', type(inputs_cl))
 
         conv = Convolution((3, 3, output_filters), strides=1, padding=1, be=be) #, init=init)
         print('created conv')
 
         conv.configure((input_filters,image_size, image_size))
-        conv.W = W_cuda
+        conv.W = W_cl
         print('configure done')
         outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
-        outputs_cuda = MyClTensor.from_np(be, outputs)
-        conv.outputs = outputs_cuda
-        conv.fprop(inputs_cuda)
+        outputs_cl = MyClTensor.from_np(be, outputs)
+        conv.outputs = outputs_cl
+        conv.fprop(inputs_cl)
 #        cuda.Context.synchronize()
 
         for it in range(its):
             start = time.time()
-            conv.fprop(inputs_cuda)
+            conv.fprop(inputs_cl)
 #            cuda.Context.synchronize()
             print('time=', time.time() - start)
 
-        outputs_cuda.to_host()
+        outputs_cl.to_host()
         return {
             'W': W,
             'outputs': outputs, 'inputs': inputs}
@@ -99,7 +99,7 @@ def simple1():
     inputs = res['inputs']
     W = res['W']
 
-    #    outputs = outputs_cuda.get()
+    #    outputs = outputs_cl.get()
     printDims(W=W, I=inputs)
     check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0)
     check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1)
