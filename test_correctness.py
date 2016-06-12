@@ -172,8 +172,29 @@ def three():
     check(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27, eps=1e-3)
     check(W=W, I=inputs, O=outputs, c=17, h=25, w=7, n=27, eps=1e-3)
 
+def four():
+    image_size = 224
+    batch_size = 128
+    input_filters = 32
+    output_filters = 32
+
+    res = process(image_size=image_size, batch_size=batch_size, input_filters=input_filters,
+        output_filters=output_filters)
+    outputs = res['outputs']
+    inputs = res['inputs']
+    W = res['W']
+
+    check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0, eps=1e-3)
+    check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1, eps=1e-3)
+    check(W=W, I=inputs, O=outputs, c=0, h=0, w=1, n=0, eps=1e-3)
+    check(W=W, I=inputs, O=outputs, c=0, h=1, w=0, n=0, eps=1e-3)
+    check(W=W, I=inputs, O=outputs, c=1, h=0, w=0, n=0, eps=1e-3)
+    check(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27, eps=1e-3)
+    check(W=W, I=inputs, O=outputs, c=17, h=25, w=7, n=27, eps=1e-3)
+
 simple1()
 one()
-#two()
-#three()
+two()
+three()
+four()
 
