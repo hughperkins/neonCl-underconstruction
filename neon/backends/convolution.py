@@ -22,7 +22,7 @@ from pycuda.compiler import SourceModule
 from pycuda.tools import context_dependent_memoize
 from neon.backends.cuda_templates import _ew_types
 from neon.backends.util.math_helper import magic64, magic32, ceil_div
-from neon.backends.kernels.cuda.convolution import _get_conv_kernel
+#from neon.backends.kernels.cuda.convolution import _get_conv_kernel
 from neon.backends.kernels.cl import convolution_cl
 from neon.backends.kernels.cl.clrunner import ClRunner, ShuffleRunner
 
