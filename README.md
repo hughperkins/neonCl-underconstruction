@@ -20,11 +20,12 @@ Latest news:
 - dimshuffle ported to opencl
 - backprop gradWeights works now
 - pretty much all cuda kernels now removed :-)
+- most inputs are now opencl buffers :-)
 
 Next steps, in no particular order:
-- migrate everything to opencl (ie remove the insane cuda-cpu-cl copying currently involved in running
-cl kernels against cuda buffers...)
+- migrate gradW to be an opencl buffer at input
 - create api method to do the convolutions (or three, ie forward, gradInput, gradWeights)
+- run some performance benchmarks
 
 ## Implementation notes
 
