@@ -126,7 +126,7 @@ def process(image_size, batch_size, input_filters, output_filters):
 
         W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
         print('W.shape', W.shape)
-        W_cuda = MyTensor.from_np(W)
+        W_cuda = MyClTensor.from_np(be, W)
 
         inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
         inputs[:] = np.random.randn(*inputs.shape)
