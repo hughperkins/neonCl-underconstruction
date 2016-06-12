@@ -19,9 +19,7 @@ Our GPU based backend interface and tensor data structure.
 import os
 import sys
 import numpy as np
-import pycuda.driver as drv
 import pyopencl as cl
-#from pycuda.tools import context_dependent_memoize
 import logging
 
 from neon.backends.backend import Backend
@@ -80,10 +78,10 @@ class NervanaGPU(Backend):
                             'rounding to %d bits' % stochastic_round)
 
         # context
-        drv.init()
+#        drv.init()
         self.device_type = 1
         self.device_id = device_id if device_id is not None else 0
-        self.ctx = drv.Device(device_id).make_context()
+#        self.ctx = drv.Device(device_id).make_context()
 
         # cl context
         platforms = cl.get_platforms()
@@ -263,10 +261,6 @@ class NervanaGPU(Backend):
                   (msecs, gflops, layer.flops/1000000.0, op, layer))
             return msecs, gflops
         return 0, 0
-
-#@context_dependent_memoize
-#def _get_scratch_data(scratch_size):
-#    return drv.mem_alloc(scratch_size)
 
 # debugging tool
 # import re

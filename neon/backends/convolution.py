@@ -17,9 +17,7 @@ Python code to wrap convolution kernels
 
 import numpy as np
 import pyopencl as cl
-import pycuda.driver as drv
 import sys
-from pycuda.tools import context_dependent_memoize
 from neon.backends.cuda_templates import _ew_types
 from neon.backends.util.math_helper import magic64, magic32, ceil_div
 from neon.backends.kernels.cl import convolution_cl

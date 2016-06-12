@@ -92,6 +92,6 @@ class make_backend(object):
          print('make backend __exit__')
 #         del self.be
 
-         self.be.ctx.pop()
-         self.be.ctx.detach()
+#         self.be.ctx.pop()
+#         self.be.ctx.detach()
 
