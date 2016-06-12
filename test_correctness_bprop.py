@@ -154,7 +154,7 @@ def process(image_size, batch_size, input_filters, output_filters):
 
         gradInputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
 #        gradInputs[:] = np.random.randn(*gradInputs.shape)
-        gradInputs_cuda = MyTensor.from_np(gradInputs)
+        gradInputs_cuda = MyClTensor.from_np(be, gradInputs)
 
         gradW = np.zeros((input_filters,3,3,output_filters), dtype=np.float32)
         gradW_cuda = MyTensor.from_np(gradW)

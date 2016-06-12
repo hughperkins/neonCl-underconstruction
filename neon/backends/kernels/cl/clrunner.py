@@ -171,7 +171,7 @@ class ClRunner(object):
     def execute_bprop(self, grid, block, stream, alpha, beta, 
             gradO_cl,
             Wt_gpudata,
-            gradI_gpudata,
+            gradI_cl,
             bsum_gpudata,            
             K, M, P, Q, N, T, R, S, C, D, H, W,
             *args, shared_size):
@@ -180,7 +180,7 @@ class ClRunner(object):
 
 #        gradO_cpu = np.zeros((C, H, W, N), dtype=np.float32)
         Wt_cpu = np.zeros((K * R * S * C,), dtype=np.float32)
-        gradI_cpu = np.zeros((H * W * K, N), dtype=np.float32)
+#        gradI_cpu = np.zeros((H * W * K, N), dtype=np.float32)
 
         # copy I and W from cuda to cpu
 #        cuda.memcpy_dtoh(gradO_cpu, gradO_gpudata)
@@ -189,7 +189,7 @@ class ClRunner(object):
         # create cl buffers
 #        gradO_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradO_cpu)
         Wt_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=Wt_cpu)
-        gradI_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=gradI_cpu)
+#        gradI_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=gradI_cpu)
 
         # create dummy one for bsum for now?
         bsum_cpu = np.zeros((1,), dtype=np.float32)
@@ -206,10 +206,10 @@ class ClRunner(object):
             *args
         )
 
-        cl.enqueue_copy(self.q, gradI_cpu, gradI_cl)
+#        cl.enqueue_copy(self.q, gradI_cpu, gradI_cl)
 
         # then to cuda...
-        cuda.memcpy_htod(gradI_gpudata, gradI_cpu)
+#        cuda.memcpy_htod(gradI_gpudata, gradI_cpu)
 
     def execute_update(
             self, grid, block, stream, alpha, beta,
