@@ -109,23 +109,23 @@ class ClRunner(object):
             ctx=ctx, options='', dtype=self.dtype, filter_size=self.filter_size,
             bsum=self.bsum, operation=self.operation)
 
-    def execute_fprop(self, grid, block, stream, alpha, beta, I_gpudata, F_gpudata, O_gpudata, bsum_gpudata,
+    def execute_fprop(self, grid, block, stream, alpha, beta, I_cl, F_gpudata, O_gpudata, bsum_gpudata,
         C, D, H, W, N, T, R, S, K, M, P, Q,
         str_w, str_h, pad_w, pad_h, HWN, KRST, PQN,
         PQ, zeroa, zerob, magic_PQ, shift_PQ, magic_Q, shift_Q, magic_S, shift_S,
         *args, shared_size):
 
-        I_cpu = np.zeros((C, H, W, N), dtype=np.float32)
+#        I_cpu = np.zeros((C, H, W, N), dtype=np.float32)
         W_cpu = np.zeros((C, R, S, K), dtype=np.float32)
         O_cpu = np.zeros((H * W * K, N), dtype=np.float32)
 
         # copy I and W from cuda to cpu
         cuda.Context.synchronize()
-        cuda.memcpy_dtoh(I_cpu, I_gpudata)
+#        cuda.memcpy_dtoh(I_cpu, I_gpudata)
         cuda.memcpy_dtoh(W_cpu, F_gpudata)
 
         # create cl buffers
-        I_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
+#        I_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
         W_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=W_cpu)
         O_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=O_cpu)
 
@@ -268,7 +268,7 @@ class ClRunner(object):
 
     def execute_update(
             self, grid, block, stream, alpha, beta,
-            I_gpudata,
+            I_cl,
             gradO_gpudata,
             gradW_gpudata,
             bsum_gpudata,
@@ -276,16 +276,16 @@ class ClRunner(object):
             *args):
 
         # create cpu buffers
-        I_cpu = np.zeros((C, H, W, N), dtype=np.float32)
+#        I_cpu = np.zeros((C, H, W, N), dtype=np.float32)
         gradO_cpu = np.zeros((C, H, W, N), dtype=np.float32)
         gradW_cpu = np.zeros((K * R * S * C,), dtype=np.float32)
 
         # cuda => cpu
-        cuda.memcpy_dtoh(I_cpu, I_gpudata)
+#        cuda.memcpy_dtoh(I_cpu, I_gpudata)
         cuda.memcpy_dtoh(gradO_cpu, gradO_gpudata)
 
         # cpu => cl
-        I_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
+#        I_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
         gradO_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradO_cpu)
         gradW_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=gradW_cpu)
 

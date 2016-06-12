@@ -5,6 +5,7 @@ import pycuda.driver as cuda
 import pycuda.autoinit
 import time
 
+from mycltensor import MyClTensor
 from neon.layers.layer import Convolution
 from neon.backends.make_backend import make_backend
 
@@ -83,7 +84,7 @@ def process(image_size, batch_size, input_filters, output_filters):
 
         inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
         inputs[:] = np.random.randn(*inputs.shape)
-        inputs_cuda = MyTensor.from_np(inputs)
+        inputs_cuda = MyClTensor.from_np(be, inputs)
 
         print('type(inputs_cuda)', type(inputs_cuda))
 
@@ -198,5 +199,5 @@ def three():
 simple1()
 one()
 #two()
-three()
+#three()
 
