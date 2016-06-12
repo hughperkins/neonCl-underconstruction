@@ -15,12 +15,8 @@ Test code is at:
 ## Status
 
 Latest news:
-- fprop is working!
-- backprop gradInputs is working!
-- dimshuffle ported to opencl
-- backprop gradWeights works now
-- pretty much all cuda kernels now removed :-)
-- all inputs are now opencl buffers :-)
+- fprop, bprop, update all ported to OpenCL, and working
+- pycuda entirely removed from neon :-)
 
 Next steps, in no particular order:
 - create api method to do the convolutions (or three, ie forward, gradInput, gradWeights)
