@@ -157,7 +157,7 @@ def process(image_size, batch_size, input_filters, output_filters):
         gradInputs_cuda = MyClTensor.from_np(be, gradInputs)
 
         gradW = np.zeros((input_filters,3,3,output_filters), dtype=np.float32)
-        gradW_cuda = MyTensor.from_np(gradW)
+        gradW_cuda = MyClTensor.from_np(be, gradW)
         
         conv.deltas = gradInputs_cuda
         conv.dW = gradW_cuda

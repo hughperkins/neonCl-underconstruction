@@ -47,6 +47,7 @@ with make_backend(batch_size=batch_size,
 
     outputs_cuda.to_host()
     print(outputs[1:3,1:3])
+    print('outputs.shape', outputs.shape)
 
     assert abs(outputs[1,1] - 1.33960593) < 1e-4
     assert abs(outputs[1,2] + 6.06682396) < 1e-4

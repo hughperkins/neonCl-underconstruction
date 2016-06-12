@@ -215,15 +215,15 @@ class ClRunner(object):
             self, grid, block, stream, alpha, beta,
             I_cl,
             gradO_cl,
-            gradW_gpudata,
+            gradW_cl,
             bsum_gpudata,
             C, D, H, W, N, T, R, S, K, M, P, Q,
             *args):
 
         # create cpu buffers
 #        I_cpu = np.zeros((C, H, W, N), dtype=np.float32)
-        gradO_cpu = np.zeros((C, H, W, N), dtype=np.float32)
-        gradW_cpu = np.zeros((K * R * S * C,), dtype=np.float32)
+#        gradO_cpu = np.zeros((C, H, W, N), dtype=np.float32)
+#        gradW_cpu = np.zeros((K * R * S * C,), dtype=np.float32)
 
         # cuda => cpu
 #        cuda.memcpy_dtoh(I_cpu, I_gpudata)
@@ -232,7 +232,7 @@ class ClRunner(object):
         # cpu => cl
 #        I_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
 #        gradO_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradO_cpu)
-        gradW_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=gradW_cpu)
+#        gradW_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=gradW_cpu)
 
         # create dummy one for bsum for now?
         bsum_cpu = np.zeros((1,), dtype=np.float32)
@@ -251,10 +251,10 @@ class ClRunner(object):
 
         # copy the result back...
         # first to cpu...
-        cl.enqueue_copy(self.q, gradW_cpu, gradW_cl)
+#        cl.enqueue_copy(self.q, gradW_cpu, gradW_cl)
 
         # then to cuda...
-        cuda.memcpy_htod(gradW_gpudata, gradW_cpu)
+#        cuda.memcpy_htod(gradW_gpudata, gradW_cpu)
 
 
 def _get_shuffle_kernel_cl(ctx, dtype):
