@@ -16,9 +16,9 @@ Python code to wrap convolution kernels
 """
 
 import numpy as np
+import pyopencl as cl
 import pycuda.driver as drv
 import sys
-from pycuda.compiler import SourceModule
 from pycuda.tools import context_dependent_memoize
 from neon.backends.cuda_templates import _ew_types
 from neon.backends.util.math_helper import magic64, magic32, ceil_div
@@ -87,7 +87,7 @@ class FpropCuda(KernelGroup):
         KRST = K * RST
         PQ = P * Q
         PQN = PQ * N
-        self.clRunner = ClRunner(dtype=self.dtype.str[1:], filter_size=R*S,
+        self.clRunner = ClRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=bsum, operation="fprop")
         grid = (PQ * (-(-N // 32)), (-(-K // 32)), 1)
         block = (8, 8, 1)
@@ -152,7 +152,7 @@ class BpropCuda(KernelGroup):
         self.bsum = bsum
 #        self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
 #                                       bsum=bsum, operation="bprop")
-        self.clRunner = ClRunner(dtype=self.dtype.str[1:], filter_size=R*S,
+        self.clRunner = ClRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=bsum, operation="bprop")
         grid = (HW * (-(-N // 32)), -(-C // 32), 1)
         block = (8, 8, 1)
@@ -176,7 +176,7 @@ class BpropCuda(KernelGroup):
             R*S, T, R, S, magic_RS, magic_S]))
 
         lib.set_scratch_size(self.shuffle_size)
-        self.shuffleRunner = ShuffleRunner(self.dtype)
+        self.shuffleRunner = ShuffleRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype)
 
     def bind_params(self, gradO, W, gradI, alpha, beta, bsum, flags=0):
         assert gradO.dtype == W.dtype == gradI.dtype
@@ -245,7 +245,7 @@ class UpdateCuda(KernelGroup):
 
 #        self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
 #                                       bsum=False, operation="update")
-        self.clRunner = ClRunner(dtype=self.dtype.str[1:], filter_size=R*S,
+        self.clRunner = ClRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=False, operation="update")
         grid = (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1)
         block = (8, 32, 1)
@@ -301,6 +301,7 @@ class UpdateCuda(KernelGroup):
 
     def execute(self, repeat=1, unbind=True):
         for r in range(repeat):
+            # TODO: what is this???
             drv.memset_d32_async(*self.zero_args)
             self.clRunner.execute_update(*self.launch_args)
             if self.convert_args:

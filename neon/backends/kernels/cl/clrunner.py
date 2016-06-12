@@ -31,20 +31,6 @@ import pycuda.driver as cuda
 from neon.backends.cuda_templates import _ew_types
 from neon.backends.kernels.cl import convolution_cl
 
-gpu_idx = 0  # hardcode this for now...
-
-platforms = cl.get_platforms()
-i = 0
-for platform in platforms:
-   gpu_devices = platform.get_devices(device_type=cl.device_type.GPU)
-   if gpu_idx < i + len(gpu_devices):
-       ctx = cl.Context(devices=[gpu_devices[gpu_idx-i]])
-       break
-   i += len(gpu_devices)
-
-print('context', ctx)
-#ctx = cl.create_some_context()
-q = cl.CommandQueue(ctx)
 mf = cl.mem_flags
 
 def call_cl_kernel(kernel, queue, grid, block, *args):
@@ -73,9 +59,11 @@ def call_cl_kernel(kernel, queue, grid, block, *args):
 #    sys.exit(1)
 
 class ShuffleRunner(object):
-    def __init__(self, dtype):
+    def __init__(self, ctx, q, dtype):
+        self.ctx = ctx
+        self.q = q
         self.dtype = dtype
-        self.shuffle_kernel_cl = _get_shuffle_kernel_cl(dtype.str[1:])
+        self.shuffle_kernel_cl = _get_shuffle_kernel_cl(self.ctx, dtype.str[1:])
         
     def execute(self, grid, block, stream, filtertemp_cuda, F_cuda,
             RSTK, RSK, SK, K, RSTC, RSC, SC, C,
@@ -90,11 +78,11 @@ class ShuffleRunner(object):
         cuda.memcpy_dtoh(F_cpu, F_cuda)
 
         # copy cpu => cl
-        F_cl = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=F_cpu)
-        filtertemp_cl = cl.Buffer(ctx, mf.WRITE_ONLY | mf.COPY_HOST_PTR, hostbuf=filtertemp_cpu)
+        F_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=F_cpu)
+        filtertemp_cl = cl.Buffer(self.ctx, mf.WRITE_ONLY | mf.COPY_HOST_PTR, hostbuf=filtertemp_cpu)
 
         call_cl_kernel(self.shuffle_kernel_cl.dimShuffle,
-            q, grid, block, 
+            self.q, grid, block, 
             filtertemp_cl,
             F_cl,
             RSTK, RSK, SK, K, RSTC, RSC, SC, C,
@@ -102,14 +90,17 @@ class ShuffleRunner(object):
         )
 
         # cl => cpu
-        cl.enqueue_copy(q, filtertemp_cpu, filtertemp_cl)
+        cl.enqueue_copy(self.q, filtertemp_cpu, filtertemp_cl)
         
         # cpu => cuda
         cuda.memcpy_htod(filtertemp_cuda, filtertemp_cpu)
 
 
 class ClRunner(object):
-    def __init__(self, dtype, filter_size, bsum, operation):
+    def __init__(self, ctx, q, dtype, filter_size, bsum, operation):
+#        self.be = be
+        self.ctx = ctx
+        self.q = q
         self.dtype = dtype
         self.filter_size = filter_size
         self.bsum = bsum
@@ -134,13 +125,13 @@ class ClRunner(object):
         cuda.memcpy_dtoh(W_cpu, F_gpudata)
 
         # create cl buffers
-        I_cl = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
-        W_cl = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=W_cpu)
-        O_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=O_cpu)
+        I_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
+        W_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=W_cpu)
+        O_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=O_cpu)
 
         # create dummy one for bsum for now?
         bsum_cpu = np.zeros((1,), dtype=np.float32)
-        bsum_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=bsum_cpu)
+        bsum_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=bsum_cpu)
 #        q.finish()
 
         blockDim = len(block)
@@ -150,9 +141,9 @@ class ClRunner(object):
             raise Exception('not implemented')
 
         # run the conv ???
-        q.finish()
+        self.q.finish()
         self.kernel.conv_fprop(
-            q,
+            self.q,
             globalSize, block,
                            np.float32(alpha), np.float32(beta),
                            I_cl,
@@ -169,10 +160,10 @@ class ClRunner(object):
                            np.uint32(magic_Q), np.uint32(shift_Q),
                            np.uint32(magic_S), np.uint32(shift_S)
         )
-        q.finish()
+        self.q.finish()
         start = time.time()
         self.kernel.conv_fprop(
-            q,
+            self.q,
             globalSize, block,
                            np.float32(alpha), np.float32(beta),
                            I_cl,
@@ -192,10 +183,10 @@ class ClRunner(object):
 
         # copy the result back...
         # first to cpu...
-        q.finish()
+        self.q.finish()
         end = time.time()
         print('kernel wallclock time', (end-start))
-        cl.enqueue_copy(q, O_cpu, O_cl)
+        cl.enqueue_copy(self.q, O_cpu, O_cl)
 
         # then to cuda...
         cuda.memcpy_htod(O_gpudata, O_cpu)
@@ -223,13 +214,13 @@ class ClRunner(object):
         cuda.memcpy_dtoh(Wt_cpu, Wt_gpudata)
 
         # create cl buffers
-        gradO_cl = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradO_cpu)
-        Wt_cl = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=Wt_cpu)
-        gradI_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=gradI_cpu)
+        gradO_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradO_cpu)
+        Wt_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=Wt_cpu)
+        gradI_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=gradI_cpu)
 
         # create dummy one for bsum for now?
         bsum_cpu = np.zeros((1,), dtype=np.float32)
-        bsum_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=bsum_cpu)
+        bsum_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=bsum_cpu)
 
 #        blockDim = len(block)
 #        if blockDim == 3:
@@ -238,7 +229,7 @@ class ClRunner(object):
 #            raise Exception('not implemented')
 
         call_cl_kernel(self.kernel.conv_bprop,
-            q, grid, block,
+            self.q, grid, block,
             alpha, beta,
             gradO_cl,
             Wt_cl,
@@ -270,7 +261,7 @@ class ClRunner(object):
 #        q.finish()
 #        end = time.time()
 #        print('kernel wallclock time', (end-start))
-        cl.enqueue_copy(q, gradI_cpu, gradI_cl)
+        cl.enqueue_copy(self.q, gradI_cpu, gradI_cl)
 
         # then to cuda...
         cuda.memcpy_htod(gradI_gpudata, gradI_cpu)
@@ -294,16 +285,16 @@ class ClRunner(object):
         cuda.memcpy_dtoh(gradO_cpu, gradO_gpudata)
 
         # cpu => cl
-        I_cl = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
-        gradO_cl = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradO_cpu)
-        gradW_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=gradW_cpu)
+        I_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
+        gradO_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradO_cpu)
+        gradW_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=gradW_cpu)
 
         # create dummy one for bsum for now?
         bsum_cpu = np.zeros((1,), dtype=np.float32)
-        bsum_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=bsum_cpu)
+        bsum_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=bsum_cpu)
 
         call_cl_kernel(self.kernel.conv_update,
-            q, grid, block, 
+            self.q, grid, block, 
             alpha, beta,
             I_cl,
             gradO_cl,
@@ -315,13 +306,13 @@ class ClRunner(object):
 
         # copy the result back...
         # first to cpu...
-        cl.enqueue_copy(q, gradW_cpu, gradW_cl)
+        cl.enqueue_copy(self.q, gradW_cpu, gradW_cl)
 
         # then to cuda...
         cuda.memcpy_htod(gradW_gpudata, gradW_cpu)
 
 
-def _get_shuffle_kernel_cl(dtype):
+def _get_shuffle_kernel_cl(ctx, dtype):
     _shuffle_kernel = r"""
 kernel void dimShuffle(
     global %(type)s* out, global const %(type)s* in,

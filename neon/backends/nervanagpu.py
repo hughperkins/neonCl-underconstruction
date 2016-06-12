@@ -20,6 +20,7 @@ import os
 import sys
 import numpy as np
 import pycuda.driver as drv
+import pyopencl as cl
 from pycuda.tools import context_dependent_memoize
 import logging
 
@@ -82,6 +83,22 @@ class NervanaGPU(Backend):
         self.device_type = 1
         self.device_id = device_id if device_id is not None else 0
         self.ctx = drv.Device(device_id).make_context()
+
+        # cl context
+#        gpu_idx = 0  # hardcode this for now...
+
+        platforms = cl.get_platforms()
+        i = 0
+        for platform in platforms:
+           gpu_devices = platform.get_devices(device_type=cl.device_type.GPU)
+           if self.device_id < i + len(gpu_devices):
+               self.cl_ctx = cl.Context(devices=[gpu_devices[self.device_id - i]])
+               break
+           i += len(gpu_devices)
+
+        print('cl_context', self.cl_ctx)
+        #ctx = cl.create_some_context()
+        self.q = cl.CommandQueue(self.cl_ctx)
 
         # super class init
         super(NervanaGPU, self).__init__(default_dtype,
