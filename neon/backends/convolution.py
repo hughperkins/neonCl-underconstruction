@@ -250,8 +250,8 @@ class UpdateCuda(KernelGroup):
         magic_PQ = magic64(pq_blocks)
         magic_Q = magic64(grid_Q)
 
-        self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
-                                       bsum=False, operation="update")
+#        self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
+#                                       bsum=False, operation="update")
         self.clRunner = ClRunner(dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=False, operation="update")
         grid = (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1)
@@ -309,7 +309,6 @@ class UpdateCuda(KernelGroup):
     def execute(self, repeat=1, unbind=True):
         for r in range(repeat):
             drv.memset_d32_async(*self.zero_args)
-            self.kernel.prepared_async_call(*self.launch_args)
             self.clRunner.execute_update(*self.launch_args)
             if self.convert_args:
                 _fp_convert(*self.convert_args)
