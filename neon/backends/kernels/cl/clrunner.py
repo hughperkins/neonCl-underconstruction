@@ -109,7 +109,7 @@ class ClRunner(object):
             ctx=ctx, options='', dtype=self.dtype, filter_size=self.filter_size,
             bsum=self.bsum, operation=self.operation)
 
-    def execute_fprop(self, grid, block, stream, alpha, beta, I_cl, W_cl, O_gpudata, bsum_gpudata,
+    def execute_fprop(self, grid, block, stream, alpha, beta, I_cl, W_cl, O_cl, bsum_gpudata,
         C, D, H, W, N, T, R, S, K, M, P, Q,
         str_w, str_h, pad_w, pad_h, HWN, KRST, PQN,
         PQ, zeroa, zerob, magic_PQ, shift_PQ, magic_Q, shift_Q, magic_S, shift_S,
@@ -117,7 +117,7 @@ class ClRunner(object):
 
 #        I_cpu = np.zeros((C, H, W, N), dtype=np.float32)
 #        W_cpu = np.zeros((C, R, S, K), dtype=np.float32)
-        O_cpu = np.zeros((H * W * K, N), dtype=np.float32)
+#        O_cpu = np.zeros((H * W * K, N), dtype=np.float32)
 
         # copy I and W from cuda to cpu
 #        cuda.Context.synchronize()
@@ -127,7 +127,7 @@ class ClRunner(object):
         # create cl buffers
 #        I_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=I_cpu)
 #        W_cl = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=W_cpu)
-        O_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=O_cpu)
+#        O_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=O_cpu)
 
         # create dummy one for bsum for now?
         bsum_cpu = np.zeros((1,), dtype=np.float32)
@@ -160,36 +160,13 @@ class ClRunner(object):
                            np.uint32(magic_Q), np.uint32(shift_Q),
                            np.uint32(magic_S), np.uint32(shift_S)
         )
-        self.q.finish()
-        start = time.time()
-        self.kernel.conv_fprop(
-            self.q,
-            globalSize, block,
-                           np.float32(alpha), np.float32(beta),
-                           I_cl,
-                           W_cl,
-                           O_cl,
-                           bsum_cl,
-                           np.int32(C), np.int32(D), np.int32(H), np.int32(W), np.int32(N),
-                           np.int32(T), np.int32(R), np.int32(S), np.int32(K),
-                           np.int32(M), np.int32(P), np.int32(Q),
-                           np.int32(str_w), np.int32(str_h), np.int32(pad_w), np.int32(pad_h),
-                           np.int32(HWN), np.int32(KRST), np.int32(PQN), np.int32(PQ),
-                           np.int32(zeroa), np.int32(zerob),
-                           np.uint32(magic_PQ), np.uint32(shift_PQ),
-                           np.uint32(magic_Q), np.uint32(shift_Q),
-                           np.uint32(magic_S), np.uint32(shift_S)
-        )
 
         # copy the result back...
         # first to cpu...
-        self.q.finish()
-        end = time.time()
-        print('kernel wallclock time', (end-start))
-        cl.enqueue_copy(self.q, O_cpu, O_cl)
+#        cl.enqueue_copy(self.q, O_cpu, O_cl)
 
         # then to cuda...
-        cuda.memcpy_htod(O_gpudata, O_cpu)
+#        cuda.memcpy_htod(O_gpudata, O_cpu)
 
     def execute_bprop(self, grid, block, stream, alpha, beta, 
             gradO_gpudata,

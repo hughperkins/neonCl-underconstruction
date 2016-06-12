@@ -170,7 +170,7 @@ def process(image_size, batch_size, input_filters, output_filters):
         inputs_cuda = MyClTensor.from_np(be, inputs)
 
         outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
-        outputs_cuda = MyTensor.from_np(outputs)
+        outputs_cuda = MyClTensor.from_np(be, outputs)
 
         conv = Convolution((3, 3, output_filters), strides=1, padding=1, be=be) #, init=init)
         print('created conv')

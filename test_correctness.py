@@ -95,15 +95,15 @@ def process(image_size, batch_size, input_filters, output_filters):
         conv.W = W_cuda
         print('configure done')
         outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
-        outputs_cuda = MyTensor.from_np(outputs)
+        outputs_cuda = MyClTensor.from_np(be, outputs)
         conv.outputs = outputs_cuda
         conv.fprop(inputs_cuda)
-        cuda.Context.synchronize()
+#        cuda.Context.synchronize()
 
         for it in range(its):
             start = time.time()
             conv.fprop(inputs_cuda)
-            cuda.Context.synchronize()
+#            cuda.Context.synchronize()
             print('time=', time.time() - start)
 
         outputs_cuda.to_host()
