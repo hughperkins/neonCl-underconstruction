@@ -22,7 +22,7 @@ def _get_conv_kernel(ctx, options, dtype, filter_size, bsum, operation, filter_b
             not a multiple of 32.
         debug (boolean): When set to true, kernels will be compiled with debug symbols.
     """
-    assert operation in ["fprop"]
+    assert operation in ["fprop", 'bprop']
     assert not bsum
     assert operation in ["fprop", "bprop", "update"]
     if operation == "fprop" or operation == "update":
@@ -70,11 +70,63 @@ def _get_conv_kernel(ctx, options, dtype, filter_size, bsum, operation, filter_b
         }
     }
 """
+    elif operation == "bprop":
+        lut_code = r"""
+    if(tid < 32)
+    {
+        int rs = tid;
+        int base_q, base_p;
+
+        base_q = output_pixel_x - (S - padding_w - 1);
+        base_p = output_pixel_y - (R - padding_h - 1);
+
+        unsigned int mask = (1 << tid) - 1;
+
+        while(rs < FILTER_SIZE)
+        {
+            int filter_x, filter_y;
+            _idiv_magic32(rs, magic_s, shift_s, S, &filter_y, &filter_x);
+
+            int index_q = base_q + filter_x;
+            int index_p = base_p + filter_y;
+
+            //Check if the index is valid
+            int in_bounds = (((index_q % stride_w) | (index_p % stride_h)) == 0);
+            index_q /= stride_w;
+            index_p /= stride_h;
+            in_bounds = in_bounds && (index_q >= 0 && index_q < W
+                                      && index_p >= 0 && index_p < H);
+            unsigned int threads_in_bounds = ballot(in_bounds);
+
+            //Store lookup table entry
+            if(in_bounds)
+            {
+                int2 lut_entry;
+                lut_entry.x = (((index_p * W) + index_q) * N) >> 2;
+                lut_entry.y = (rs * K) >> 2;
+
+                int index = lut_size_local + popcnt(threads_in_bounds & mask);
+                lookup_table[index] = lut_entry;
+            }
+
+            lut_size_local += popcnt(threads_in_bounds);
+
+            rs += 32;
+        }
+    }
+"""
     bsum_code = ""
 
-    if operation == "fprop":
+    if operation == "update":
         a_name = "image"
-        b_name = "filter"
+        b_name = "error"
+    else:
+        if operation == "fprop":
+            a_name = "image"
+            b_name = "filter"
+        elif operation == "bprop":
+            a_name = "error"
+            b_name = "filter"
 
     if filter_bounds_check:
         filter_load_cond = "int filter_load_in_bounds = (((filter_id + get_local_id(0)) << 2) < K);"
@@ -359,7 +411,10 @@ static inline uint ballot(const uint i) {
 }
 """
 
-    code = header_code + code
+    if operation == "update":
+        code = header_code + update_code
+    else:
+        code = header_code + code
 
     magic = magic64(filter_size)
 
