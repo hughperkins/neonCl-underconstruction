@@ -13,6 +13,6 @@ for platform in platforms:
    i += len(gpu_devices)
 
 kernel = _get_conv_kernel(ctx=ctx, options='', dtype='f4', filter_size=9, bsum=False, operation='fprop')
-
 kernel = _get_conv_kernel(ctx=ctx, options='', dtype='f4', filter_size=9, bsum=False, operation='bprop')
+kernel = _get_conv_kernel(ctx=ctx, options='', dtype='f4', filter_size=9, bsum=False, operation='update')
 

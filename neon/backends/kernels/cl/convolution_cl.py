@@ -35,7 +35,6 @@ def _get_conv_kernel(ctx, options, dtype, filter_size, bsum, operation, filter_b
             not a multiple of 32.
         debug (boolean): When set to true, kernels will be compiled with debug symbols.
     """
-    assert operation in ["fprop", 'bprop']
     assert not bsum
     assert operation in ["fprop", "bprop", "update"]
     if operation == "fprop" or operation == "update":
@@ -399,6 +398,207 @@ kernel void conv_%(operation)s(
 }
 """
 
+    update_code = r"""
+{
+    local Matrix %(a_name)s_data[TILE_DIM / 4][THREADS_DIM * 4 + 4];
+    local Matrix %(b_name)s_data[TILE_DIM / 4][THREADS_DIM * 4 + 4];
+
+    //TODO: Use square access pattern to image data to increase cache hits
+    int output_pixel, filter_id;
+    _idiv_magic(get_group_id(0), magic_pq, shift_pq, output_pixels, &filter_id, &output_pixel);
+    filter_id = filter_id * TILE_DIM;
+    int load_filter_id = filter_id + get_local_id(1);
+
+    int filter_pixel_id = get_group_id(1) * TILE_DIM;
+
+    //TODO: Zig zag along x axis to increase cache hits
+    int output_pixel_x, output_pixel_y;
+    _idiv_magic(output_pixel, magic_q, shift_q, grid_q, &output_pixel_y, &output_pixel_x);
+
+    //Compute input image and filter offsets for this pixel
+    int c, rs;
+    int crs = filter_pixel_id + get_local_id(1);
+    _idiv_magic(crs, MAGIC_FILTER_SIZE, SHIFT_FILTER_SIZE, FILTER_SIZE, &c, &rs);
+
+    int filter_x, filter_y;
+    _idiv_magic32(rs, magic_s, shift_s, S, &filter_y, &filter_x);
+
+    int output_pixel_x_save = output_pixel_x;
+    for(; output_pixel_y < P; output_pixel_y += grid_p)
+    {
+        for(output_pixel_x = output_pixel_x_save; output_pixel_x < Q; output_pixel_x += grid_q)
+        {
+            int base_x = output_pixel_x * stride_w - padding_w + filter_x;
+            int base_y = output_pixel_y * stride_h - padding_h + filter_y;
+            int crs_in_bounds = (c < C) && (base_x >= 0) && (base_x < W) &&
+                                (base_y >= 0) && (base_y < H);
+            int input_pixel = W * base_y + base_x;
+            output_pixel = output_pixel_x + (Q * output_pixel_y);
+
+            //Pre-multiply offset to simplify indexing
+            input_pixel = (input_pixel * N) >> 2;
+            output_pixel = (output_pixel * N) >> 2;
+
+            //Evaluate gemm with outer product dimensions N, K and inner product CRS
+            Matrix result[ITEMS_PER_THREAD];
+            for(int i=0; i < ITEMS_PER_THREAD; i++) {  // not ideal, but gets it working
+                result[i].f4 = (float4)0.0f;
+            }
+
+            //Load image data and transpose into shared mem
+            //TODO: pad shared memory to avoid bank conflicts
+            Matrix buffer;
+            buffer.f4 = crs_in_bounds ?
+                        I[(c * input_channel_size) + input_pixel + get_local_id(0)].f4 :
+                        (float4)0.0f;
+            %(a_name)s_data[get_local_id(0)][ 0 | get_local_id(1) >> 2].f[get_local_id(1) & 3] = buffer.f[0];
+            %(a_name)s_data[get_local_id(0)][ 8 | get_local_id(1) >> 2].f[get_local_id(1) & 3] = buffer.f[1];
+            %(a_name)s_data[get_local_id(0)][16 | get_local_id(1) >> 2].f[get_local_id(1) & 3] = buffer.f[2];
+            %(a_name)s_data[get_local_id(0)][24 | get_local_id(1) >> 2].f[get_local_id(1) & 3] = buffer.f[3];
+
+            //Load error data and transpose into shared mem
+            buffer.f4 = (load_filter_id < K) ?
+                        F[(load_filter_id * output_filter_size) + output_pixel + get_local_id(0)].f4 :
+                        (float4)0.0f;
+            %(b_name)s_data[get_local_id(0)][ 0 | get_local_id(1) >> 2].f[get_local_id(1) & 3] = buffer.f[0];
+            %(b_name)s_data[get_local_id(0)][ 8 | get_local_id(1) >> 2].f[get_local_id(1) & 3] = buffer.f[1];
+            %(b_name)s_data[get_local_id(0)][16 | get_local_id(1) >> 2].f[get_local_id(1) & 3] = buffer.f[2];
+            %(b_name)s_data[get_local_id(0)][24 | get_local_id(1) >> 2].f[get_local_id(1) & 3] = buffer.f[3];
+
+            //Iterate over entire minibatch
+            for(int n = get_local_id(0) + (TILE_DIM >> 2); n < (N >> 2); n += (TILE_DIM >> 2))
+            {
+                barrier(CLK_LOCAL_MEM_FENCE);
+
+                #pragma unroll
+                for(int i = 0; i < (TILE_DIM >> 2); i++)
+                {
+                    Matrix row_image;
+                    Matrix row_error;
+
+                    row_image.f4 =
+                        %(a_name)s_data[i][((get_local_id(1) & 3) << 3) | get_local_id(1) >> 2].f4;
+                    row_error.f4 =
+                        %(b_name)s_data[i][((get_local_id(1) & 3) << 3) | get_local_id(0)].f4;
+
+                    //Accumulate product
+                    #pragma unroll
+                    for(int q_offset = 0; q_offset < ITEMS_PER_THREAD; q_offset++)
+                    {
+                        #pragma unroll
+                        for(int p_offset = 0; p_offset < ITEMS_PER_THREAD; p_offset++)
+                        {
+                            result[p_offset].f[q_offset] +=
+                                (row_image.f[p_offset] * row_error.f[q_offset]);
+                        }
+                    }
+                }
+
+                barrier(CLK_LOCAL_MEM_FENCE);
+
+                //Load image data and transpose into shared mem
+                buffer.f4 = crs_in_bounds ?
+                    I[(c * input_channel_size) + input_pixel + n].f4 :
+                    (float4)0.0f;
+                %(a_name)s_data[get_local_id(0)][ 0 | get_local_id(1) >> 2].f[get_local_id(1) & 3] =
+                    buffer.f[0];
+                %(a_name)s_data[get_local_id(0)][ 8 | get_local_id(1) >> 2].f[get_local_id(1) & 3] =
+                    buffer.f[1];
+                %(a_name)s_data[get_local_id(0)][16 | get_local_id(1) >> 2].f[get_local_id(1) & 3] =
+                    buffer.f[2];
+                %(a_name)s_data[get_local_id(0)][24 | get_local_id(1) >> 2].f[get_local_id(1) & 3] =
+                    buffer.f[3];
+
+                //Load error data and transpose into shared mem
+                buffer.f4 = (load_filter_id < K) ?
+                    F[(load_filter_id * output_filter_size) + output_pixel + n].f4 :
+                    (float4)0.0f;
+                %(b_name)s_data[get_local_id(0)][ 0 | get_local_id(1) >> 2].f[get_local_id(1) & 3] =
+                    buffer.f[0];
+                %(b_name)s_data[get_local_id(0)][ 8 | get_local_id(1) >> 2].f[get_local_id(1) & 3] =
+                    buffer.f[1];
+                %(b_name)s_data[get_local_id(0)][16 | get_local_id(1) >> 2].f[get_local_id(1) & 3] =
+                    buffer.f[2];
+                %(b_name)s_data[get_local_id(0)][24 | get_local_id(1) >> 2].f[get_local_id(1) & 3] =
+                    buffer.f[3];
+            }
+
+            barrier(CLK_LOCAL_MEM_FENCE);
+
+            //Accumulate product for last iteration
+            #pragma unroll
+            for(int i = 0; i < (TILE_DIM >> 2); i++)
+            {
+                Matrix row_image;
+                Matrix row_error;
+
+                row_image.f4 = %(a_name)s_data[i][((get_local_id(1) & 3) << 3) | get_local_id(1) >> 2].f4;
+                row_error.f4 = %(b_name)s_data[i][((get_local_id(1) & 3) << 3) | get_local_id(0)].f4;
+
+                //Accumulate product
+                #pragma unroll
+                for(int q_offset = 0; q_offset < ITEMS_PER_THREAD; q_offset++)
+                {
+                    #pragma unroll
+                    for(int p_offset = 0; p_offset < ITEMS_PER_THREAD; p_offset++)
+                    {
+                        result[p_offset].f[q_offset] +=
+                            (row_image.f[p_offset] * row_error.f[q_offset]);
+                    }
+                }
+            }
+
+            //Reduce result between threads in warp
+            Matrix outbound;
+            int warp_y = get_local_id(1) & 3;
+            int warp_id = get_local_id(0) + (get_local_id(1) << 3);
+            buffer.f4 = (warp_y == 0) ? result[0].f4 :
+                        (warp_y == 1) ? result[1].f4 :
+                        (warp_y == 2) ? result[2].f4 :
+                        result[3].f4;
+
+            outbound.f4 = (warp_y == 0) ? result[3].f4 :
+                          (warp_y == 1) ? result[0].f4 :
+                          (warp_y == 2) ? result[1].f4 :
+                          result[2].f4;
+            buffer.f[0] += shfl(outbound.f[0], warp_id + 8);
+            buffer.f[1] += shfl(outbound.f[1], warp_id + 8);
+            buffer.f[2] += shfl(outbound.f[2], warp_id + 8);
+            buffer.f[3] += shfl(outbound.f[3], warp_id + 8);
+
+            outbound.f4 = (warp_y == 0) ? result[2].f4 :
+                          (warp_y == 1) ? result[3].f4 :
+                          (warp_y == 2) ? result[0].f4 :
+                          result[1].f4;
+            buffer.f[0] += shfl(outbound.f[0], warp_id + 16);
+            buffer.f[1] += shfl(outbound.f[1], warp_id + 16);
+            buffer.f[2] += shfl(outbound.f[2], warp_id + 16);
+            buffer.f[3] += shfl(outbound.f[3], warp_id + 16);
+
+            outbound.f4 = (warp_y == 0) ? result[1].f4 :
+                          (warp_y == 1) ? result[2].f4 :
+                          (warp_y == 2) ? result[3].f4 :
+                          result[0].f4;
+            buffer.f[0] += shfl(outbound.f[0], warp_id + 24);
+            buffer.f[1] += shfl(outbound.f[1], warp_id + 24);
+            buffer.f[2] += shfl(outbound.f[2], warp_id + 24);
+            buffer.f[3] += shfl(outbound.f[3], warp_id + 24);
+
+            //Store result
+            int idx_filter_id = filter_id + (get_local_id(0) << 2);
+            if(idx_filter_id < K && crs_in_bounds)
+            {
+                int out_index = (c * filter_channel_size) + (((rs * K) + (idx_filter_id)) >> 2);
+
+                ourAtomicAdd(&O[out_index].f[0], buffer.f[0]);
+                ourAtomicAdd(&O[out_index].f[1], buffer.f[1]);
+                ourAtomicAdd(&O[out_index].f[2], buffer.f[2]);
+                ourAtomicAdd(&O[out_index].f[3], buffer.f[3]);
+            }
+        }
+    }
+}
+"""
     # this will work on nvidia.  on others we can maybe use
     # builtin popcnt and sub_group_reduce methods?
     popcnt = """
@@ -408,6 +608,8 @@ static inline uint popcnt(const uint i) {
     return n;
 }
 """
+    # this will work on nvidia.  on others we can maybe use
+    # builtin popcnt and sub_group_reduce methods?
     ballot = """
 static inline uint ballot(const uint i) {
   uint n;
@@ -421,6 +623,37 @@ static inline uint ballot(const uint i) {
      : "r" (i)
   );
   return n;
+}
+"""
+    # this will work on nvidia.  on others we can maybe use
+    # builtin opencl2.0 atomicAdd methods?
+    atomicAdd = """
+static inline void ourAtomicAdd(global float *dest, float value) {
+    asm(
+        "{\\n\\t"
+        ".reg .f32 %%f1;\\n\\t"
+        "atom.global.add.f32 %%f1, [%0], %1;\\n\\t"
+        "}"
+        :
+        : "l"(dest), "r" (value)
+        : "memory"
+    );
+}
+"""
+
+    # this will work on nvidia.  should check how to handle on non-nvidia
+    # worst case, via local memory
+    shfl = """
+static inline float shfl(float value, int lane) {
+    float ret;
+    asm(
+        "{\\n\\t"
+        "shfl.idx.b32 %0, %1, %2, 31;\\n\\t"
+        "}"
+        : "=f"(ret)
+        : "f"(value), "r" (lane)
+    );
+    return ret;
 }
 """
 
@@ -444,7 +677,7 @@ static inline uint ballot(const uint i) {
         "filter_load_cond":     filter_load_cond,
         "check_filter_cond":    check_filter_cond
     }
-    code = popcnt + ballot + code
+    code = popcnt + ballot + atomicAdd + shfl + code
 
     with open('/tmp/out.cl', 'w') as f:
         f.write(code)
