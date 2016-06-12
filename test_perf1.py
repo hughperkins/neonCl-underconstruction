@@ -34,19 +34,11 @@ with make_backend(batch_size=batch_size,
     outputs_cl = MyClTensor.from_np(be, outputs)
     conv.outputs = outputs_cl
     conv.fprop(inputs_cl)
+    be.q.finish()
     for it in range(10):
       start = time.time()
       for i in range(10):
         conv.fprop(inputs_cl)
-#      cuda.Context.synchronize()
+      be.q.finish()
       print('time=', time.time() - start)
-
-
-    outputs_cl.to_host()
-    print(outputs[1:3,1:3])
-    print('outputs.shape', outputs.shape)
-
-    assert abs(outputs[1,1] - 1.33960593) < 1e-4
-    assert abs(outputs[1,2] + 6.06682396) < 1e-4
-    assert abs(outputs[2,2] - 8.76905346) < 1e-4
 
