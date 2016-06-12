@@ -23,7 +23,7 @@ import sys
 import numpy as np
 from math import ceil
 
-from neon.backends.util import check_gpu
+#from neon.backends.util import check_gpu
 from neon.backends.nervanagpu import NervanaGPU
 
 
@@ -74,10 +74,11 @@ class make_backend(object):
               package installed will cause the program to display an error message and exit.
         """
         # check nvcc
-        self.gpuflag = (check_gpu.get_compute_capability(self.device_id) >= 3.0)
-        if self.gpuflag is False:
-            raise RuntimeError("Device " + str(self.device_id) + " does not have CUDA compute " +
-                               "capability 3.0 or greater")
+#        self.gpuflag = (check_gpu.get_compute_capability(self.device_id) >= 3.0)
+#        if self.gpuflag is False:
+#            raise RuntimeError("Device " + str(self.device_id) + " does not have CUDA compute " +
+#                               "capability 3.0 or greater")
+
         # init gpu
         self.be = NervanaGPU(default_dtype=self.datatype,
                         stochastic_round=self.stochastic_round,
