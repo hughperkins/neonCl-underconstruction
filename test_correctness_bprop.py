@@ -15,8 +15,8 @@
 from __future__ import print_function
 
 import numpy as np
-import pycuda.driver as cuda
-import pycuda.autoinit
+#import pycuda.driver as cuda
+#import pycuda.autoinit
 import time
 
 from mycltensor import MyClTensor
@@ -164,7 +164,7 @@ def process(image_size, batch_size, input_filters, output_filters):
 
         print('gradOutputs_cuda', gradOutputs_cuda)
         conv.bprop(gradOutputs_cuda)
-        cuda.Context.synchronize()
+#        cuda.Context.synchronize()
 
     #    outputs = outputs_cuda.get()
         gradInputs_cuda.to_host()

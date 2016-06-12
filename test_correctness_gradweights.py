@@ -15,8 +15,8 @@
 from __future__ import print_function
 
 import numpy as np
-import pycuda.driver as cuda
-import pycuda.autoinit
+#import pycuda.driver as cuda
+#import pycuda.autoinit
 import time
 
 from mycltensor import MyClTensor

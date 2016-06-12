@@ -1,7 +1,7 @@
 from neon.layers.layer import Convolution
 from neon.backends.make_backend import make_backend
 import numpy as np
-import pycuda.driver as cuda
+#import pycuda.driver as cuda
 #import pycuda.autoinit
 #import pycuda.gpuarray as gpuarray
 from mycltensor import MyClTensor
