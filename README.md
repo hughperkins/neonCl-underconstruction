@@ -19,10 +19,13 @@ This is started at:
 
 ## Status
 
-fprop is working!
+Latest news:
+- fprop is working!
+- backprop gradInputs is working!
 
 Next steps, in no particular order:
-- port also backprop weights and backprop inputs
+- port also backprop weights
+- port dim_shuffle (?)
 - migrate everything to opencl (ie remove the insane cuda-cpu-cl copying currently involved in running
 cl kernels against cuda buffers...)
 
