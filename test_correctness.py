@@ -1,8 +1,6 @@
 from __future__ import print_function
 
 import numpy as np
-import pycuda.driver as cuda
-import pycuda.autoinit
 import time
 
 from mycltensor import MyClTensor
@@ -49,28 +47,6 @@ def check(O, W, I, c, h, w, n, eps=1e-4):
     print('c', c, 'h', h, 'w', w, 'n', n, 'cpu %.6f gpu %.6f' % (sum, gpu_value))
     assert abs(sum - gpu_value) < eps
     return ""
-
-class MyTensor(object):
-    def __init__(self, gpudata, shape, size):
-        self.gpudata = gpudata
-        self.size = size
-        self.dtype = np.float32
-        self.cpudata = None
-        self.shape = shape
-
-    @staticmethod
-    def from_np(np_data):
-        cudabuf = cuda.mem_alloc(np_data.nbytes)
-        cuda.memcpy_htod(cudabuf, np_data)
-#        self.cpudata = np_data
-        tensor = MyTensor(cudabuf, shape=np_data.shape, size=np_data.size)
-        tensor.cpudata = np_data
-        return tensor
-
-    def to_host(self):
-        if self.cpudata is None:
-            raise Exception('not implemented')
-        cuda.memcpy_dtoh(self.cpudata, self.gpudata)
 
 def process(image_size, batch_size, input_filters, output_filters):
     np.random.seed(123)
