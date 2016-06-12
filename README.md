@@ -26,6 +26,17 @@ Next steps, in no particular order:
 cl kernels against cuda buffers...)
 - create api method to do the convolutions (or three, ie forward, gradInput, gradWeights)
 
+## Implementation notes
+
+* currently targeted at NVIDIA devices, using OpenCL 1.2, but allowing use of inline PTX assembler
+occasionally, where OpenCL 1.2 doesnt include some functionality
+* concretely, the following inline methods need to be implemented for other platforms, eg using OpenCL
+methods, or platform-specific assembly, or similar:
+  * `__shfl`  (OpenCL 2.0 sub-groups?)
+  * `__ballot` (OpenCL 2.0 sub groups?)
+  * `__popc` (OpenCL 2.0 `popcnt`?)
+  * `__atomicAdd` (OpenCL 2.0 atomics?)
+
 ## License
 
 Apache 2.0, per original neon
