@@ -19,8 +19,38 @@ def printDims(W, I):
     kW = W.shape[2]
     print('Ci', Ci, 'iH', iH, 'iW', iW, 'Co', Co, 'kH', kH, 'kW', kW)
 
-def check_gradInputs(O, I, W, gradOutputs, c, h, w, n):
-    pass
+def check_gradInputs(O, I, W, gradOutputs, gradInputs, c, h, w, n, eps=1e-4):
+    N = I.shape[3]
+    iH = I.shape[1]
+    iW = I.shape[2]
+    Ci = W.shape[0]
+    kH = W.shape[1]
+    kW = W.shape[2]
+    Co = W.shape[3]
+    oH = iH # assuming padded, which it is
+    oW = iW # assuming padded, which it is
+#    print('Ci', Ci, 'iH', iH, 'iW', iW, 'Co', Co, 'kH', kH, 'kW', kW)
+
+    ih = h
+    iw = w
+    ci = c
+
+    padw = 1
+    padh = 1
+
+    sum = 0
+    for co in range(Co):
+        for kh in range(kH):
+            for kw in range(kW):
+                ow = iw - kw + padw
+                oh = ih - kh + padh
+                if ow >= 0 and oh >= 0 and ow < oW and oh < oH:
+                    v = gradOutputs[co * iH * iW + oh * iW + ow, n] * W[ci, kh, kw, co]
+                    sum += v
+    cpu_value = sum
+    gpu_value = gradInputs[c, ih, iw, n]
+    print('gpu', gpu_value, 'cpu', cpu_value)
+    assert abs(cpu_value - gpu_value) < eps
 
 def check(O, W, I, c, h, w, n, eps=1e-4):
     Ci = W.shape[0]
@@ -73,12 +103,7 @@ class MyTensor(object):
             raise Exception('not implemented')
         cuda.memcpy_dtoh(self.cpudata, self.gpudata)
 
-def simple1():
-    image_size = 3
-    batch_size = 32
-    input_filters = 4
-    output_filters = 4
-
+def process(image_size, batch_size, input_filters, output_filters):
     np.random.seed(123)
 
     with make_backend(batch_size=batch_size,
@@ -103,16 +128,17 @@ def simple1():
         print('configure done')
         # we probably should do fprop first
         conv.outputs = outputs_cuda
+        
         conv.fprop(inputs_cuda)
         outputs_cuda.to_host()
 
-        gradOutputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
+        gradOutputs = np.random.randn(image_size * image_size * output_filters, batch_size).astype(np.float32)
         gradOutputs_cuda = MyTensor.from_np(gradOutputs)
 
 #        print('type(inputs_cuda)', type(inputs_cuda))
 
         gradInputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
-        gradInputs[:] = np.random.randn(*gradInputs.shape)
+#        gradInputs[:] = np.random.randn(*gradInputs.shape)
         gradInputs_cuda = MyTensor.from_np(gradInputs)
 
         gradW = np.zeros((input_filters,3,3,output_filters), dtype=np.float32)
@@ -125,26 +151,33 @@ def simple1():
         conv.bprop(gradOutputs_cuda)
         cuda.Context.synchronize()
 
-        for it in range(its):
-            start = time.time()
-            conv.fprop(inputs_cuda)
-            cuda.Context.synchronize()
-            print('time=', time.time() - start)
-
     #    outputs = outputs_cuda.get()
         gradInputs_cuda.to_host()
         gradW_cuda.to_host()
-        check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, c=0, h=0, w=0, n=0)
-        
-#        printDims(W=W, I=gradInputs)
-#        check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0)
-#        check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1)
-#        check(W=W, I=inputs, O=outputs, c=0, h=1, w=0, n=0)
-#        check(W=W, I=inputs, O=outputs, c=0, h=0, w=1, n=0)
-#        check(W=W, I=inputs, O=outputs, c=1, h=0, w=0, n=0)
-#        check(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27)
+        return {
+            'gradInputs': gradInputs, 'gradOutputs': gradOutputs, 'W': W,
+            'gradW': gradW, 'outputs': outputs, 'inputs': inputs}
 
-#        print('outputs.shape', outputs.shape)
+def simple1():
+    image_size = 3
+    batch_size = 32
+    input_filters = 4
+    output_filters = 4
+    
+    res = process(image_size=image_size, batch_size=batch_size, input_filters=input_filters,
+        output_filters=output_filters)
+    outputs = res['outputs']
+    inputs = res['inputs']
+    gradOutputs = res['gradOutputs']
+    gradInputs = res['gradInputs']
+    W = res['W']
+    
+#        print('gradW', gradW)
+    check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, gradInputs=gradInputs, c=0, h=0, w=0, n=0)
+    check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, gradInputs=gradInputs, c=0, h=0, w=0, n=1)
+    check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, gradInputs=gradInputs, c=0, h=0, w=1, n=0)
+    check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, gradInputs=gradInputs, c=0, h=1, w=0, n=0)
+    check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, gradInputs=gradInputs, c=0, h=0, w=0, n=0)
 
 def one():
     image_size = 64
@@ -152,51 +185,20 @@ def one():
     input_filters = 32
     output_filters = 32
 
-    np.random.seed(123)
-    
-    with make_backend(batch_size=batch_size,
-            datatype=np.float32, device_id=0) as be:
-        W = np.random.randn(input_filters,3,3,output_filters).astype(np.float32)
-        W_cuda = MyTensor.from_np(W)
+    res = process(image_size=image_size, batch_size=batch_size, input_filters=input_filters,
+        output_filters=output_filters)
+    outputs = res['outputs']
+    inputs = res['inputs']
+    gradOutputs = res['gradOutputs']
+    gradInputs = res['gradInputs']
+    W = res['W']
 
-        print('type(W_cuda)', type(W_cuda))
-
-        inputs = np.zeros((input_filters,image_size, image_size,batch_size), dtype=np.float32)
-        inputs[:] = np.random.randn(*inputs.shape)
-        inputs_cuda = MyTensor.from_np(inputs)
-
-        print('type(inputs_cuda)', type(inputs_cuda))
-
-        conv = Convolution((3, 3, output_filters), strides=1, padding=1, be=be) #, init=init)
-        print('created conv')
-        conv.W = W_cuda
-
-        conv.configure((input_filters,image_size, image_size))
-        conv.W = W_cuda
-        print('configure done')
-        outputs = np.zeros((image_size * image_size * output_filters, batch_size), dtype=np.float32)
-        outputs_cuda = MyTensor.from_np(outputs)
-        conv.outputs = outputs_cuda
-        conv.fprop(inputs_cuda)
-        cuda.Context.synchronize()
-        for it in range(3):
-          start = time.time()
-          conv.fprop(inputs_cuda)
-          cuda.Context.synchronize()
-          print('time=', time.time() - start)
-
-    #    outputs = outputs_cuda.get()
-        outputs_cuda.to_host()
-        print(outputs[1:3,1:3])
-        print('outputs.shape', outputs.shape)
-        printDims(W=W, I=inputs)
-        check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=0)
-        check(W=W, I=inputs, O=outputs, c=0, h=0, w=0, n=1)
-        check(W=W, I=inputs, O=outputs, c=0, h=0, w=1, n=0)
-        check(W=W, I=inputs, O=outputs, c=0, h=1, w=0, n=0)
-        check(W=W, I=inputs, O=outputs, c=1, h=0, w=0, n=0)
-        check(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27)
-        check(W=W, I=inputs, O=outputs, c=17, h=25, w=7, n=27)
+    check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, gradInputs=gradInputs, c=0, h=0, w=0, n=0)
+    check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, gradInputs=gradInputs, c=0, h=0, w=0, n=1)
+    check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, gradInputs=gradInputs, c=0, h=0, w=1, n=0)
+    check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, gradInputs=gradInputs, c=0, h=1, w=0, n=0)
+    check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, gradInputs=gradInputs, c=0, h=0, w=0, n=0)
+    check_gradInputs(O=outputs, I=inputs, W=W, gradOutputs=gradOutputs, gradInputs=gradInputs, c=19, h=7, w=4, n=17)
 
 def two():
     image_size = 64
