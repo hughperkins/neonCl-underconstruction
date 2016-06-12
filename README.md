@@ -16,10 +16,10 @@ Test code is at:
 Latest news:
 - fprop is working!
 - backprop gradInputs is working!
+- dimshuffle ported to opencl
 
 Next steps, in no particular order:
 - port also backprop weights
-- port dim_shuffle (?)
 - migrate everything to opencl (ie remove the insane cuda-cpu-cl copying currently involved in running
 cl kernels against cuda buffers...)
 
