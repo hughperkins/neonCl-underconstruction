@@ -11,10 +11,6 @@ Test code is at:
 - [test_correctness.py](test_correctness.py)   For fprop correctness
 - [test_correctness_bprop.py](test_correctness_bprop.py)    For gradInput backprop correctness
 
-## Plan
-
-It's a port of neon convolutions to OpenCL (in progress)
-
 ## Status
 
 Latest news:
