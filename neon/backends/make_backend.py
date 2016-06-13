@@ -41,6 +41,14 @@ class make_backend(object):
         self.compat_mode = compat_mode
         self.cache_dir = cache_dir
         self.be = None
+        self.be = NervanaGPU(default_dtype=self.datatype,
+                        stochastic_round=self.stochastic_round,
+                        device_id=self.device_id,
+                        compat_mode=self.compat_mode,
+                        cache_dir=self.cache_dir)
+
+        self.be.bsz = self.batch_size
+#        return self.be
 
     def __enter__(self):
         """
@@ -74,13 +82,6 @@ class make_backend(object):
               package installed will cause the program to display an error message and exit.
         """
         # init gpu
-        self.be = NervanaGPU(default_dtype=self.datatype,
-                        stochastic_round=self.stochastic_round,
-                        device_id=self.device_id,
-                        compat_mode=self.compat_mode,
-                        cache_dir=self.cache_dir)
-
-        self.be.bsz = self.batch_size
         return self.be
 
     def __exit__(self, *args):
