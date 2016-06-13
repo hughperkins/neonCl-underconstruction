@@ -21,16 +21,23 @@ For geometry:
 
 ## Installation
 
+### Prerequisites
+
+* NVIDIA GPU (though should be straightforward to make it work also on AMD etc, but for now should be
+NVIDIA)
+* GPU drivers installed
+* OpenCL library installed/available
+
+### Procedure
+
 ```
 git clone https://github.com/hughperkins/winogradCl-underconstruction winogradCl
 cd winogradCl
-sudo apt-get install python3 python3-dev opencl-headers python-virtualenv
-virtualenv -p python3 env3
+bash install.sh
+```
+Before running any script, do:
+```
 source env3/bin/activate
-pip install -U pip
-pip install -U setuptools
-pip install -U wheel
-pip install -r requirements.txt
 ```
 
 ## Correctness tests
@@ -46,10 +53,16 @@ Test code is at:
 
 Working :-)
 
+## Future evolutions
+
 Next up:
 - create simple API
 - run performance test
 - add to cltorch
+
+Medium-term:
+- make work on Intel HD GPU (I have one)
+- make work on AMD GPU (either someone else can do this, or I can do it, if someone can provide me with a cloud-hosted one)
 
 ## Implementation notes
 
