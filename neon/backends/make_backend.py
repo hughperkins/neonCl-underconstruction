@@ -73,12 +73,6 @@ class make_backend(object):
             * Attempts to construct a GPU instance without a CUDA capable card or without nervanagpu
               package installed will cause the program to display an error message and exit.
         """
-        # check nvcc
-#        self.gpuflag = (check_gpu.get_compute_capability(self.device_id) >= 3.0)
-#        if self.gpuflag is False:
-#            raise RuntimeError("Device " + str(self.device_id) + " does not have CUDA compute " +
-#                               "capability 3.0 or greater")
-
         # init gpu
         self.be = NervanaGPU(default_dtype=self.datatype,
                         stochastic_round=self.stochastic_round,
@@ -90,9 +84,5 @@ class make_backend(object):
         return self.be
 
     def __exit__(self, *args):
-         print('make backend __exit__')
-#         del self.be
-
-#         self.be.ctx.pop()
-#         self.be.ctx.detach()
+        pass
 
