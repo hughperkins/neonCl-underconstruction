@@ -161,7 +161,7 @@ class NervanaGPU(Backend):
 
         if total_size > self.scratch_size:
             self.scratch_size = total_size
-            self.scratch_cpu = np.zeros((total_size/4,), dtype=np.float32)
+            self.scratch_cpu = np.zeros((total_size // 4,), dtype=np.float32)
             self.scratch = cl.Buffer(self.cl_ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=self.scratch_cpu)
 
     def execute(self, optree):
