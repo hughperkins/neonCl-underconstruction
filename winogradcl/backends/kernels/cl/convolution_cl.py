@@ -14,8 +14,8 @@
 """
 For now this will only do fprop.  that's probably non-trivial enough for now...
 """
-from neon.backends.util.math_helper import magic64
-from neon.backends.cuda_templates import _ew_types
+from winogradcl.backends.util.math_helper import magic64
+from winogradcl.backends.cuda_templates import _ew_types
 import pyopencl as cl
 
 def _get_conv_kernel(ctx, options, dtype, filter_size, bsum, operation, filter_bounds_check=False, debug=False):
@@ -691,7 +691,7 @@ static inline float shfl(float value, int lane) {
 #    options = ["--use_fast_math"]
 #    if debug and operation == "bprop":
 #        options = options + ["-g", "-G"]
-    module = cl.Program(ctx, code).build()
+    module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
     return module
 
 #    kernel = module.get_function("conv_" + operation)

@@ -23,8 +23,7 @@ import sys
 import numpy as np
 from math import ceil
 
-#from neon.backends.util import check_gpu
-from neon.backends.nervanagpu import NervanaGPU
+from winogradcl.backends.nervanagpu import NervanaGPU
 
 
 logger = logging.getLogger(__name__)

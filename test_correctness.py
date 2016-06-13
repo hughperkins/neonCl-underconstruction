@@ -4,8 +4,8 @@ import numpy as np
 import time
 
 from mycltensor import MyClTensor
-from neon.layers.layer import Convolution
-from neon.backends.make_backend import make_backend
+from winogradcl.layers.layer import Convolution
+from winogradcl.backends.make_backend import make_backend
 
 its = 1
 
@@ -192,9 +192,9 @@ def four():
     check(W=W, I=inputs, O=outputs, c=3, h=2, w=1, n=27, eps=1e-3)
     check(W=W, I=inputs, O=outputs, c=17, h=25, w=7, n=27, eps=1e-3)
 
-simple1()
-one()
+#simple1()
+#one()
 two()
-three()
-four()
+#three()
+#four()
 

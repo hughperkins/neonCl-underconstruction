@@ -20,7 +20,7 @@ TODO: remove any non-param caching code, neon layers should replace benchmark co
 """
 import logging
 import numpy as np
-from neon.backends import convolution
+from winogradcl.backends import convolution
 from operator import mul
 import sys
 

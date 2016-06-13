@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2016 Nervana Systems Inc.
+# Copyright 2016 Nervana Systems Inc. Hugh Perkins 2016
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -19,7 +19,7 @@ from setuptools import setup, find_packages, Command
 import subprocess
 
 # Define version information
-VERSION = '1.4.0'
+VERSION = '0.0.1'
 FULLVERSION = VERSION
 write_version = True
 
@@ -34,7 +34,7 @@ except:
 
 if write_version:
     txt = "# " + ("-" * 77) + "\n"
-    txt += "# Copyright 2016 Nervana Systems Inc.\n"
+    txt += "# Copyright 2016 Nervana Systems Inc., 2016 Hugh Perkins\n"
     txt += "# Licensed under the Apache License, Version 2.0 "
     txt += "(the \"License\");\n"
     txt += "# you may not use this file except in compliance with the "
@@ -54,7 +54,7 @@ if write_version:
     txt += "# limitations under the License.\n"
     txt += "# " + ("-" * 77) + "\n"
     txt += "\"\"\"\n%s\n\"\"\"\nVERSION = '%s'\nSHORT_VERSION = '%s'\n"
-    fname = os.path.join(os.path.dirname(__file__), 'neon', 'version.py')
+    fname = os.path.join(os.path.dirname(__file__), 'winogradcl', 'version.py')
     a = open(fname, 'w')
     try:
         a.write(txt % ("Project version information.", FULLVERSION, VERSION))
@@ -62,22 +62,18 @@ if write_version:
         a.close()
 
 
-setup(name='neon',
+setup(name='winogradcl',
       version=VERSION,
-      description="Nervana's deep learning framework",
+      description="OpenCL port of Nervana's Kepler Winograd kernels",
       long_description=open('README.md').read(),
-      author='Nervana Systems',
-      author_email='info@nervanasys.com',
-      url='http://www.nervanasys.com',
+      author='Hugh Perkins',
+      author_email='hughperkins@gmail.com',
+      url='http://github.com/hughperkins/winogradCl-underconstruction',
       license='License :: OSI Approved :: Apache Software License',
       scripts=[],
       packages=find_packages(exclude=["tests"]),
-      package_data={'neon': []},
-      classifiers=['Development Status :: 3 - Alpha',
-                   'Environment :: Console',
-                   'Environment :: Console :: Curses',
-                   'Environment :: Web Environment',
-                   'Intended Audience :: End Users/Desktop',
+      package_data={'winogradcl': []},
+      classifiers=['Development Status :: 2 - Beta',
                    'Intended Audience :: Developers',
                    'Intended Audience :: Science/Research',
                    'License :: OSI Approved :: Apache Software License',

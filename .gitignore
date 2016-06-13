@@ -8,6 +8,7 @@
 *.swp
 .DS_Store
 neon/version.py
+winogradcl/version.py
 *@eaDir
 .pkgs
 *.egg-info

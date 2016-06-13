@@ -22,8 +22,8 @@ import numpy as np
 import pyopencl as cl
 import logging
 
-from neon.backends.backend import Backend
-from neon.backends.layer_gpu import ConvLayer
+from winogradcl.backends.backend import Backend
+from winogradcl.backends.layer_gpu import ConvLayer
 
 _none_slice = slice(None, None, None)
 

@@ -1,5 +1,5 @@
 import pyopencl as cl
-from neon.backends.kernels.cl.convolution_cl import _get_conv_kernel
+from winogradcl.backends.kernels.cl.convolution_cl import _get_conv_kernel
 
 gpu_idx = 0
 

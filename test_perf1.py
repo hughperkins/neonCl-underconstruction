@@ -1,5 +1,5 @@
-from neon.layers.layer import Convolution
-from neon.backends.make_backend import make_backend
+from winogradcl.layers.layer import Convolution
+from winogradcl.backends.make_backend import make_backend
 import numpy as np
 from mycltensor import MyClTensor
 import time
