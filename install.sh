@@ -9,4 +9,5 @@ pip install -U pip
 pip install -U setuptools
 pip install -U wheel
 pip install -r requirements.txt
+pip install -e ./
 
