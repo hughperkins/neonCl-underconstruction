@@ -1,7 +1,7 @@
 from winogradcl.layers.layer import Convolution
 from winogradcl.backends.make_backend import make_backend
 import numpy as np
-from mycltensor import MyClTensor
+from winogradcl.backends.kernels.cl.mycltensor import MyClTensor
 import time
 
 image_size = 224
