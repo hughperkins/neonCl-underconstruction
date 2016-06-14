@@ -19,6 +19,8 @@ For geometry:
 - nervana neon, Kepler kernels, CUDA: 0.036 seconds
 - nervana neon, OpenCL (this): 0.041 seconds
 
+More detailed benchmarks in progress at [neon-benchmarks](https://github.com/hughperkins/neon-benchmarks)
+
 ## Installation
 
 ### Prerequisites
