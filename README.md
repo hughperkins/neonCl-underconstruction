@@ -29,11 +29,11 @@ source env3/bin/activate
 
 ## Performance
 
-Please see [neon-benchmarks](https://github.com/hughperkins/neon-benchmarks)
+Please see [neon-benchmarks](https://github.com/hughperkins/neon-benchmarks/blob/master/results/vgga_summary.md)
 
 ## Correctness tests
 
-[neon-benchmarks](https://github.com/hughperkins/neon-benchmarks)
+[neon-benchmarks](https://github.com/hughperkins/neon-benchmarks/blob/master/results/vgga_summary.md)
 
 ## Status
 
