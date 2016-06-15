@@ -1,25 +1,10 @@
-# What's this branch?
+# WinogradCl
 
-This is a port of nervana neon Kepler convolution kernels to OpenCL.
+A port of nervana neon Kepler convolution kernels to OpenCL.
 
 The original neon, documentation etc is at https://github.com/nervanasystems/neon
 
-## Performance
-
-Preliminary results:
-
-For geometry:
-- image_size: 224 x 224
-- batch_size: 128
-- input_filters: 32
-- output_filters: 32
-
-...times for forward propagation, on a Titan X, are:
-- nervana neon, Maxwell kernels, CUDA (SOTA): 0.025 seconds
-- nervana neon, Kepler kernels, CUDA: 0.036 seconds
-- nervana neon, OpenCL (this): 0.041 seconds
-
-More detailed benchmarks in progress at [neon-benchmarks](https://github.com/hughperkins/neon-benchmarks)
+Note that Kepler kernels are not the fast SASS ones, but they're fairly ok :-)
 
 ## Installation
 
@@ -27,7 +12,7 @@ More detailed benchmarks in progress at [neon-benchmarks](https://github.com/hug
 
 * NVIDIA GPU (though should be straightforward to make it work also on AMD etc, but for now should be
 NVIDIA)
-* GPU drivers installed
+* CUDA and GPU drivers installed
 * OpenCL library installed/available
 
 ### Procedure
@@ -42,14 +27,13 @@ Before running any script, do:
 source env3/bin/activate
 ```
 
+## Performance
+
+Please see [neon-benchmarks](https://github.com/hughperkins/neon-benchmarks)
+
 ## Correctness tests
 
-Test code is at:
-- [test_perf.py](test_perf.py)  For timings
-- [test_perf1.py](test_perf1.py)  For timings in the OpenCL timings in the Performance section above
-- [test_correctness.py](test_correctness.py)   For fprop correctness
-- [test_correctness_bprop.py](test_correctness_bprop.py)    For gradInput backprop correctness
-- [test_correctness_gradweights.py](test_correctness_gradweights.py)    For gradW backprop correctness
+[neon-benchmarks](https://github.com/hughperkins/neon-benchmarks)
 
 ## Status
 
@@ -59,7 +43,6 @@ Working :-)
 
 Next up:
 - create simple API
-- run performance test
 - add to cltorch
 
 Medium-term:
