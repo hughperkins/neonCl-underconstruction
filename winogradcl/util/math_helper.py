@@ -1,4 +1,4 @@
-# Magic numbers and shift amounts for integer division
+# Multiplier and shift for integer division
 # Suitable for when nmax*magic fits in 32 bits
 # Shamelessly pulled directly from:
 # http://www.hackersdelight.org/hdcodetxt/magicgu.py.txt  Doc from there:
@@ -18,7 +18,7 @@ overflowing the word size in which the computations are done.
 8-bit number.
    Also, magicgu(127, 7) is an 8-bit number, but magicgu(90, 7) is a
 6-bit number. """
-# Ok, the intuition behind this is:
+# Hugh says: Ok, the intuition behind this is:
 # - we can divide by any power of 2, by bitshift
 # - by multiplying by some number first, we can divide by other numbers, not just
 #   powers of 2
@@ -30,26 +30,26 @@ overflowing the word size in which the computations are done.
 #       which is dividing by 30.9999
 #       since we are using integers, this rounds to division by 31 (this last line is hand-waving
 #      more info eg in https://gmplib.org/~tege/divcnst-pldi94.pdf )
-def magic32(nmax, d):
+def get_div_mul_shift_32(nmax, d):
     nc = ((nmax + 1) // d) * d - 1
     nbits = len(bin(nmax)) - 2
     for p in range(0, 2 * nbits + 1):
         if 2 ** p > nc * (d - 1 - (2 ** p - 1) % d):
             m = (2 ** p + d - 1 - (2 ** p - 1) % d) // d
             return (m, p)
-    raise ValueError("Can't find magic number for division")
+    raise ValueError("Can't find multiplier for dividing by %s" % d)
 
 
-# Magic numbers and shift amounts for integer division
+# Multiplier and shift for integer division
 # Suitable for when nmax*magic fits in 64 bits and the shift
 # lops off the lower 32 bits
-def magic64(d):
+def get_div_mul_shift_64(d):
     # 3 is a special case that only ends up in the high bits
     # if the nmax is 0xffffffff
     # we can't use 0xffffffff for all cases as some return a 33 bit
     # magic number
     nmax = 0xffffffff if d == 3 else 0x7fffffff
-    magic, shift = magic32(nmax, d)
+    magic, shift = get_div_mul_shift_32(nmax, d)
     if magic != 1:
         shift -= 32
     return (magic, shift)

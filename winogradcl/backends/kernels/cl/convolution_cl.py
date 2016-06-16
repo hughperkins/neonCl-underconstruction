@@ -14,7 +14,7 @@
 """
 For now this will only do fprop.  that's probably non-trivial enough for now...
 """
-from winogradcl.util.math_helper import magic64
+from winogradcl.util.math_helper import get_div_mul_shift_64
 from winogradcl.backends.cuda_templates import _ew_types
 import pyopencl as cl
 
@@ -668,12 +668,12 @@ static inline float shfl(float value, int lane) {
     else:
         code = header_code + code
 
-    magic = magic64(filter_size)
+    div_filtersize_mul_shift = get_div_mul_shift_64(filter_size)
 
     code = code % {
         "filter_size":          filter_size,
-        "magic_filter_size":    magic[0],
-        "shift_filter_size":    magic[1],
+        "magic_filter_size":    div_filtersize_mul_shift[0],
+        "shift_filter_size":    div_filtersize_mul_shift[1],
         "type":                 _ew_types[dtype]["type"],
         "lut_code":             lut_code,
         "bsum_code":            bsum_code,

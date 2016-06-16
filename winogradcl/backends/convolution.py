@@ -19,7 +19,7 @@ import numpy as np
 import pyopencl as cl
 import sys
 from winogradcl.backends.cuda_templates import _ew_types
-from winogradcl.util.math_helper import magic64, magic32, ceil_div
+from winogradcl.util.math_helper import get_div_mul_shift_32, get_div_mul_shift_64, ceil_div
 from winogradcl.backends.kernels.cl import convolution_cl
 from winogradcl.backends.kernels.cl.clrunner import ClRunner, ShuffleRunner
 
@@ -77,9 +77,9 @@ class FpropCuda(KernelGroup):
         assert N % 32 == 0, "N dim must be multiple of 32"
         assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
 
-        magic_PQ = magic64(P*Q)
-        magic_Q = magic64(Q)
-        magic_S = magic32(R*S+32, S)
+        div_PQ_mul_shift = get_div_mul_shift_64(P*Q)
+        div_Q_mul_shift = get_div_mul_shift_64(Q)
+        div_S_mul_shift = get_div_mul_shift_32(R*S+32, S)
         HWN = H * W * N
         RST = R * S * T
         KRST = K * RST
@@ -93,7 +93,7 @@ class FpropCuda(KernelGroup):
                                        str_w, str_h, pad_w, pad_h,
                                        HWN // 4, KRST // 4, PQN // 4,
                                        PQ, 0, 0,
-                                       magic_PQ, magic_Q, magic_S])
+                                       div_PQ_mul_shift, div_Q_mul_shift, div_S_mul_shift])
         self.launch_args = [grid, block] + [None] * 7 + static_kernel_args
 
         self.shared = RST * 4 * 2
@@ -133,10 +133,10 @@ class BpropCuda(KernelGroup):
         assert N % 32 == 0, "N dim must be multiple of 32"
         assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
 
-        magic_HW = magic64(H*W)
-        magic_W = magic64(W)
-        magic_RS = magic32(R*S*T+32, R*S)
-        magic_S = magic32(R*S+32, S)
+        div_HW_mul_shift = get_div_mul_shift_64(H*W)
+        div_W_mul_shift = get_div_mul_shift_64(W)
+        div_RS_mul_shift = get_div_mul_shift_32(R*S*T+32, R*S)
+        div_S_mul_shift = get_div_mul_shift_32(R*S+32, S)
         HW = H * W
         HWN = HW * N
         RST = R * S * T
@@ -153,7 +153,7 @@ class BpropCuda(KernelGroup):
                                        str_w, str_h, pad_w, pad_h,
                                        PQN // 4, CRST // 4, HWN // 4,
                                        HW, 0, 0,
-                                       magic_HW, magic_W, magic_S])
+                                       div_HW_mul_shift, div_W_mul_shift, div_S_mul_shift])
         self.launch_args = [grid, block] + [None] * 7 + static_kernel_args
 
         self.shared = R*S*T * 4 * 2
@@ -166,7 +166,7 @@ class BpropCuda(KernelGroup):
         self.shuffle_args.extend(_flatten([
             R*S*T*K, R*S*K, S*K, K,
             R*S*T*C, R*S*C, S*C, C,
-            R*S, T, R, S, magic_RS, magic_S]))
+            R*S, T, R, S, div_RS_mul_shift, div_S_mul_shift]))
 
         lib.set_scratch_size(self.shuffle_size)
         self.shuffleRunner = ShuffleRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype)
@@ -221,7 +221,7 @@ class UpdateCuda(KernelGroup):
         CRSTK = KRST * C
         PQ = P * Q
         PQN = PQ * N
-        magic_S = magic32(R*S+32, S)
+        div_S_mul_shift = get_div_mul_shift_32(R*S+32, S)
 
         if lib.deterministic:
             grid_P = 1
@@ -233,8 +233,8 @@ class UpdateCuda(KernelGroup):
             self.determ = 0
 
         pq_blocks = grid_P * grid_Q
-        magic_PQ = magic64(pq_blocks)
-        magic_Q = magic64(grid_Q)
+        div_PQ_mul_shift = get_div_mul_shift_64(pq_blocks)
+        div_Q_mul_shift = get_div_mul_shift_64(grid_Q)
 
         self.clRunner = ClRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype.str[1:], filter_size=R*S,
                                        bsum=False, operation="update")
@@ -244,7 +244,7 @@ class UpdateCuda(KernelGroup):
                                        str_w, str_h, pad_w, pad_h,
                                        HWN // 4, KRST // 4, PQN // 4,
                                        PQ, grid_P, grid_Q,
-                                       magic_PQ, magic_Q, magic_S])
+                                       div_PQ_mul_shift, div_Q_mul_shift, div_S_mul_shift])
         self.launch_args = [grid, block] + [None] * 7 + static_kernel_args
 
         lib.set_scratch_size((self.determ or C*T*R*S*K)*4)
