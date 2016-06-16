@@ -62,14 +62,14 @@ class ShuffleRunner(object):
         
     def execute(self, grid, block, stream, filtertemp_cl, F_cl,
             RSTK, RSK, SK, K, RSTC, RSC, SC, C,
-            RS, T, R, S, magic_RS, shift_RS, magic_S, shift_S):
+            RS, T, R, S, div_RS_mul, div_RS_shift, div_S_mul, div_S_shift):
 
         call_cl_kernel(self.shuffle_kernel_cl.dimShuffle,
             self.q, grid, block, 
             filtertemp_cl,
             F_cl,
             RSTK, RSK, SK, K, RSTC, RSC, SC, C,
-            RS, T, R, S, magic_RS, shift_RS, magic_S, shift_S
+            RS, T, R, S, div_RS_mul, div_RS_shift, div_S_mul, div_S_shift
         )
 
 
@@ -87,8 +87,6 @@ class ClRunner(object):
 
     def execute_fprop(self, grid, block, stream, alpha, beta, I_cl, W_cl, O_cl, bsum_gpudata,
         C, D, H, W, N, T, R, S, K, M, P, Q,
-        str_w, str_h, pad_w, pad_h, HWN, KRST, PQN,
-        PQ, zeroa, zerob, magic_PQ, shift_PQ, magic_Q, shift_Q, magic_S, shift_S,
         *args, shared_size):
 
         # create dummy one for bsum for now?
@@ -101,24 +99,15 @@ class ClRunner(object):
         else:
             raise Exception('not implemented')
 
-        self.q.finish()
-        self.kernel.conv_fprop(
-            self.q,
-            globalSize, block,
-                           np.float32(alpha), np.float32(beta),
-                           I_cl,
-                           W_cl,
-                           O_cl,
-                           bsum_cl,
-                           np.int32(C), np.int32(D), np.int32(H), np.int32(W), np.int32(N),
-                           np.int32(T), np.int32(R), np.int32(S), np.int32(K),
-                           np.int32(M), np.int32(P), np.int32(Q),
-                           np.int32(str_w), np.int32(str_h), np.int32(pad_w), np.int32(pad_h),
-                           np.int32(HWN), np.int32(KRST), np.int32(PQN), np.int32(PQ),
-                           np.int32(zeroa), np.int32(zerob),
-                           np.uint32(magic_PQ), np.uint32(shift_PQ),
-                           np.uint32(magic_Q), np.uint32(shift_Q),
-                           np.uint32(magic_S), np.uint32(shift_S)
+        call_cl_kernel(self.kernel.conv_fprop,
+            self.q, grid, block,
+            alpha, beta,
+            I_cl,
+            W_cl,
+            O_cl,
+            bsum_cl,
+            C, D, H, W, N, T, R, S, K, M, P, Q,
+            *args
         )
 
     def execute_bprop(self, grid, block, stream, alpha, beta, 
