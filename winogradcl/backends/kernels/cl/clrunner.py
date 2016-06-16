@@ -165,8 +165,8 @@ kernel void dimShuffle(
     int TRSK, int RSK, int SK, int K,
     int TRSC, int RSC, int SC, int C,
     int RS, int T, int R, int S,
-    int magic_RS, int shift_RS,
-    int magic_S,  int shift_S)
+    int div_RS_mul, int div_RS_shift,
+    int div_S_mul,  int div_S_shift)
 {
     local %(type)s tile[32][33];
 
@@ -179,10 +179,10 @@ kernel void dimShuffle(
     int k  = bk * 32 + tx;
     int c  = bc * 32 + ty;
 
-    int t  = magic_RS * trs; t >>= shift_RS;
+    int t  = div_RS_mul * trs; t >>= div_RS_shift;
     int rs = trs - t*RS;
 
-    int r = magic_S * rs; r >>= shift_S;
+    int r = div_S_mul * rs; r >>= div_S_shift;
     int s = rs - r*S;
 
     for (int j = 0; j < 32; j += 8)
