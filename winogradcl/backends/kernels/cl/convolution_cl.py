@@ -14,7 +14,7 @@
 """
 For now this will only do fprop.  that's probably non-trivial enough for now...
 """
-from winogradcl.backends.util.math_helper import magic64
+from winogradcl.util.math_helper import magic64
 from winogradcl.backends.cuda_templates import _ew_types
 import pyopencl as cl
 

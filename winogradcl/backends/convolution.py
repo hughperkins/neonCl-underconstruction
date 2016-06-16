@@ -19,7 +19,7 @@ import numpy as np
 import pyopencl as cl
 import sys
 from winogradcl.backends.cuda_templates import _ew_types
-from winogradcl.backends.util.math_helper import magic64, magic32, ceil_div
+from winogradcl.util.math_helper import magic64, magic32, ceil_div
 from winogradcl.backends.kernels.cl import convolution_cl
 from winogradcl.backends.kernels.cl.clrunner import ClRunner, ShuffleRunner
 
