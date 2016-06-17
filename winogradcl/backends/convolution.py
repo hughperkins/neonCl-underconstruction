@@ -166,7 +166,6 @@ class BpropCuda(KernelGroup):
 
         lib.set_scratch_size(self.shuffle_size)
         self.shuffleKernel = get_shuffle_kernel_cl(self.lib.cl_ctx, self.dtype.str[1:])
-        # self.shuffleRunner = ShuffleRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype)
 
     def bind_params(self, gradO, W, gradI, alpha, beta, flags=0):
         assert gradO.dtype == W.dtype == gradI.dtype
@@ -182,7 +181,6 @@ class BpropCuda(KernelGroup):
         assert C >= 4, "C dim must be 4 or greater for CUDA C backprop kernel"
         for r in range(repeat):
             call_cl_kernel(self.shuffleKernel, self.lib.q, *self.shuffle_args)
-            # self.shuffleRunner.execute(*self.shuffle_args)
             call_cl_kernel(self.kernel, self.lib.q, *self.launch_args)
         if unbind:
             self.shuffle_args[2:4] = (None,) * 2
