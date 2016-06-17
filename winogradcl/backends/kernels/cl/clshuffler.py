@@ -15,7 +15,7 @@ class ShuffleRunner(object):
         self.shuffle_kernel_cl = _get_shuffle_kernel_cl(self.ctx, dtype.str[1:])
         
     def execute(self, *args):
-        call_cl_kernel(self.shuffle_kernel_cl.dimShuffle,
+        call_cl_kernel(self.shuffle_kernel_cl,
             self.q, *args
         )
 
@@ -73,5 +73,5 @@ kernel void dimShuffle(
 """
     code = _shuffle_kernel % _ew_types[dtype]
     module = cl.Program(ctx, code).build()
-    return module
+    return module.dimShuffle
 
