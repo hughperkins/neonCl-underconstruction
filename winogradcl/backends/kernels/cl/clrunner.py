@@ -34,7 +34,7 @@ class ClRunner(object):
             ctx=ctx, options='', dtype=self.dtype, filter_size=self.filter_size,
             bsum=self.bsum, operation=self.operation)
 
-    def execute_fprop(self, grid, block, stream, alpha, beta, I_cl, W_cl, O_cl, bsum_gpudata,
+    def execute_fprop(self, grid, block, alpha, beta, I_cl, W_cl, O_cl, bsum_gpudata,
         *args, shared_size):
 
         # create dummy one for bsum for now?
@@ -57,7 +57,7 @@ class ClRunner(object):
             *args
         )
 
-    def execute_bprop(self, grid, block, stream, alpha, beta, 
+    def execute_bprop(self, grid, block, alpha, beta, 
             gradO_cl,
             Wt_cl,
             gradI_cl,
@@ -79,7 +79,7 @@ class ClRunner(object):
         )
 
     def execute_update(
-            self, grid, block, stream, alpha, beta,
+            self, grid, block, alpha, beta,
             I_cl,
             gradO_cl,
             gradW_cl,
