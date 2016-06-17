@@ -1,26 +1,9 @@
-import time
 import numpy as np
 import pyopencl as cl
 from winogradcl.backends.cuda_templates import _ew_types
-from winogradcl.backends.kernels.cl.callkernel import call_cl_kernel
 
 
-mf = cl.mem_flags
-
-class ShuffleRunner(object):
-    def __init__(self, ctx, q, dtype):
-        self.ctx = ctx
-        self.q = q
-        self.dtype = dtype
-        self.shuffle_kernel_cl = _get_shuffle_kernel_cl(self.ctx, dtype.str[1:])
-        
-    def execute(self, *args):
-        call_cl_kernel(self.shuffle_kernel_cl,
-            self.q, *args
-        )
-
-
-def _get_shuffle_kernel_cl(ctx, dtype):
+def get_shuffle_kernel_cl(ctx, dtype):
     _shuffle_kernel = r"""
 kernel void dimShuffle(
     global %(type)s* out, global const %(type)s* in,

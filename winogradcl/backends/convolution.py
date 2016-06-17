@@ -21,7 +21,7 @@ import sys
 from winogradcl.backends.cuda_templates import _ew_types
 from winogradcl.util.math_helper import get_div_mul_shift_32, get_div_mul_shift_64, ceil_div
 from winogradcl.backends.kernels.cl import convolution_cl
-from winogradcl.backends.kernels.cl.clshuffler import ShuffleRunner
+from winogradcl.backends.kernels.cl.clshuffler import get_shuffle_kernel_cl
 from winogradcl.backends.kernels.cl.callkernel import call_cl_kernel
 
 
@@ -165,7 +165,8 @@ class BpropCuda(KernelGroup):
             R*S, T, R, S, div_RS_mul_shift, div_S_mul_shift]))
 
         lib.set_scratch_size(self.shuffle_size)
-        self.shuffleRunner = ShuffleRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype)
+        self.shuffleKernel = get_shuffle_kernel_cl(self.lib.cl_ctx, self.dtype.str[1:])
+        # self.shuffleRunner = ShuffleRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype)
 
     def bind_params(self, gradO, W, gradI, alpha, beta, flags=0):
         assert gradO.dtype == W.dtype == gradI.dtype
@@ -180,7 +181,8 @@ class BpropCuda(KernelGroup):
         C = self.shuffle_args[12]
         assert C >= 4, "C dim must be 4 or greater for CUDA C backprop kernel"
         for r in range(repeat):
-            self.shuffleRunner.execute(*self.shuffle_args)
+            call_cl_kernel(self.shuffleKernel, self.lib.q, *self.shuffle_args)
+            # self.shuffleRunner.execute(*self.shuffle_args)
             call_cl_kernel(self.kernel, self.lib.q, *self.launch_args)
         if unbind:
             self.shuffle_args[2:4] = (None,) * 2
