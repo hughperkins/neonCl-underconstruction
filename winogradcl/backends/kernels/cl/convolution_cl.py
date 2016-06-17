@@ -689,7 +689,7 @@ static inline float shfl(float value, int lane) {
 #    if debug and operation == "bprop":
 #        options = options + ["-g", "-G"]
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
-    return module
+    return module.__getattr__('conv_%s' % operation)
 
 #    kernel = module.get_function("conv_" + operation)
 #    kernel.prepare("ffPPPPIIIIIIIIIIIIIIIIIIIIIIIIIIII")

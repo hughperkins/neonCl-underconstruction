@@ -21,7 +21,6 @@ import sys
 from winogradcl.backends.cuda_templates import _ew_types
 from winogradcl.util.math_helper import get_div_mul_shift_32, get_div_mul_shift_64, ceil_div
 from winogradcl.backends.kernels.cl import convolution_cl
-from winogradcl.backends.kernels.cl.clrunner import ClRunner
 from winogradcl.backends.kernels.cl.clshuffler import ShuffleRunner
 from winogradcl.backends.kernels.cl.callkernel import call_cl_kernel
 
@@ -87,8 +86,9 @@ class FpropCuda(KernelGroup):
         KRST = K * RST
         PQ = P * Q
         PQN = PQ * N
-        self.clRunner = ClRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype.str[1:], filter_size=R*S,
-                                       operation="fprop")
+        self.kernel = convolution_cl._get_conv_kernel(
+            ctx=self.lib.cl_ctx, options='', dtype=self.dtype.str[1:], filter_size=R*S,
+            operation='fprop')
         grid = (PQ * (-(-N // 32)), (-(-K // 32)), 1)
         block = (8, 8, 1)
         static_kernel_args = _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
@@ -102,13 +102,12 @@ class FpropCuda(KernelGroup):
 
     def bind_params(self, I, F, O, alpha, beta, flags=0):
         assert I.dtype == F.dtype == O.dtype
-        # bsum_gpudata, flags = self.init_bsum(bsum, flags)
         self.launch_args[2:7] = (alpha, beta,
                                  I.gpudata, F.gpudata, O.gpudata)
 
     def execute(self, repeat=1, unbind=True):
         for r in range(repeat):
-            self.clRunner.execute_fprop(*self.launch_args)
+            call_cl_kernel(self.kernel, self.lib.q, *self.launch_args)
         if unbind:
             self.launch_args[2:7] = (None,) * 5
 
@@ -142,9 +141,9 @@ class BpropCuda(KernelGroup):
         PQ = P * Q
         PQN = PQ * N
 
-        # self.bsum = bsum
-        self.clRunner = ClRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype.str[1:], filter_size=R*S,
-                                       operation="bprop")
+        self.kernel = convolution_cl._get_conv_kernel(
+            ctx=self.lib.cl_ctx, options='', dtype=self.dtype.str[1:], filter_size=R*S,
+            operation='bprop')
         grid = (HW * (-(-N // 32)), -(-C // 32), 1)
         block = (8, 8, 1)
         static_kernel_args = _flatten([K, M, P, Q, N, T, R, S, C, D, H, W,
@@ -155,7 +154,6 @@ class BpropCuda(KernelGroup):
         self.launch_args = [grid, block] + [None] * 5 + static_kernel_args
 
         self.shared = R*S*T * 4 * 2
-        # self.flags = (bsum and 4)
 
         # generate the kernel args for dim shuffling CTRSK => KTRSC
         shuffle_grid = (ceil_div(K, 32), ceil_div(C, 32), R*S*T)
@@ -183,7 +181,7 @@ class BpropCuda(KernelGroup):
         assert C >= 4, "C dim must be 4 or greater for CUDA C backprop kernel"
         for r in range(repeat):
             self.shuffleRunner.execute(*self.shuffle_args)
-            self.clRunner.execute_bprop(*self.launch_args)
+            call_cl_kernel(self.kernel, self.lib.q, *self.launch_args)
         if unbind:
             self.shuffle_args[2:4] = (None,) * 2
             self.launch_args[2:7] = (None,) * 5
@@ -227,8 +225,9 @@ class UpdateCuda(KernelGroup):
         div_PQ_mul_shift = get_div_mul_shift_64(pq_blocks)
         div_Q_mul_shift = get_div_mul_shift_64(grid_Q)
 
-        self.clRunner = ClRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype.str[1:], filter_size=R*S,
-                                       operation="update")
+        self.kernel = convolution_cl._get_conv_kernel(
+            ctx=self.lib.cl_ctx, options='', dtype=self.dtype.str[1:], filter_size=R*S,
+            operation='update')
         grid = (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1)
         block = (8, 32, 1)
         static_kernel_args = _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
@@ -277,14 +276,13 @@ class UpdateCuda(KernelGroup):
         self.zero_args = [update_temp, 0, gradW.size, self.lib.stream]
 
         beta = 0.0
-        # bsum_gpudata = 0
         self.launch_args[2:7] = (alpha, beta,
                                  I.gpudata, gradO.gpudata, gradW.gpudata)
 
     def execute(self, repeat=1, unbind=True):
         for r in range(repeat):
             cl.enqueue_fill_buffer(self.lib.q, self.zero_args[0], np.float32(0), 0, self.zero_args[2] * 4)
-            self.clRunner.execute_update(*self.launch_args)
+            call_cl_kernel(self.kernel, self.lib.q, *self.launch_args)
             if self.convert_args:
                 _fp_convert(*self.convert_args)
 
