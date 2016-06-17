@@ -24,14 +24,10 @@ mf = cl.mem_flags
 
 class ClRunner(object):
     def __init__(self, ctx, q, dtype, filter_size, operation):
-        self.ctx = ctx
         self.q = q
-        self.dtype = dtype
-        self.filter_size = filter_size
-        self.operation = operation
         self.kernel = convolution_cl._get_conv_kernel(
-            ctx=ctx, options='', dtype=self.dtype, filter_size=self.filter_size,
-            operation=self.operation)
+            ctx=ctx, options='', dtype=dtype, filter_size=filter_size,
+            operation=operation)
 
     def execute_fprop(self, *args):
         call_cl_kernel(self.kernel.conv_fprop,
