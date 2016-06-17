@@ -12,66 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-this is going to receive a cuda buffer
-copy it to an np buffer
-copy it to a cl buffer
-call the cl fprop
-then reverse the process
-
-It's going to be mega-fast :-P
-
-but it'll at least show the cl fprop is/isnt working
-"""
-
 import time
 import numpy as np
 import pyopencl as cl
 from winogradcl.backends.cuda_templates import _ew_types
 from winogradcl.backends.kernels.cl import convolution_cl
+from winogradcl.backends.kernels.cl.callkernel import call_cl_kernel
+
 
 mf = cl.mem_flags
-
-def call_cl_kernel(kernel, queue, grid, block, *args):
-    blockDim = len(block)
-    if blockDim == 3:
-        globalSize = (block[0] * grid[0], block[1] * grid[1], block[2] * grid[2])  # hacky? what do you mean? :-P
-    else:
-        raise Exception('not implemented')
-
-    newargs = []
-    i = 0
-    for arg in args:
-        if isinstance(arg, int):
-            newargs.append(np.int32(arg))
-        elif isinstance(arg, float):
-            newargs.append(np.float32(arg))
-        elif isinstance(arg, cl.cffi_cl.Buffer):
-            newargs.append(arg)
-        else:
-            raise Exception('type not implemented %s' % type(arg))
-        i += 1
-    kernel(queue, globalSize, block, *newargs)
-
-class ShuffleRunner(object):
-    def __init__(self, ctx, q, dtype):
-        self.ctx = ctx
-        self.q = q
-        self.dtype = dtype
-        self.shuffle_kernel_cl = _get_shuffle_kernel_cl(self.ctx, dtype.str[1:])
-        
-    def execute(self, grid, block, stream, filtertemp_cl, F_cl,
-            RSTK, RSK, SK, K, RSTC, RSC, SC, C,
-            RS, T, R, S, div_RS_mul, div_RS_shift, div_S_mul, div_S_shift):
-
-        call_cl_kernel(self.shuffle_kernel_cl.dimShuffle,
-            self.q, grid, block, 
-            filtertemp_cl,
-            F_cl,
-            RSTK, RSK, SK, K, RSTC, RSC, SC, C,
-            RS, T, R, S, div_RS_mul, div_RS_shift, div_S_mul, div_S_shift
-        )
-
 
 class ClRunner(object):
     def __init__(self, ctx, q, dtype, filter_size, bsum, operation):
@@ -86,7 +35,6 @@ class ClRunner(object):
             bsum=self.bsum, operation=self.operation)
 
     def execute_fprop(self, grid, block, stream, alpha, beta, I_cl, W_cl, O_cl, bsum_gpudata,
-        C, D, H, W, N, T, R, S, K, M, P, Q,
         *args, shared_size):
 
         # create dummy one for bsum for now?
@@ -106,7 +54,6 @@ class ClRunner(object):
             W_cl,
             O_cl,
             bsum_cl,
-            C, D, H, W, N, T, R, S, K, M, P, Q,
             *args
         )
 
@@ -114,8 +61,7 @@ class ClRunner(object):
             gradO_cl,
             Wt_cl,
             gradI_cl,
-            bsum_gpudata,            
-            K, M, P, Q, N, T, R, S, C, D, H, W,
+            bsum_gpudata,
             *args, shared_size):
 
         # create dummy one for bsum for now?
@@ -129,7 +75,6 @@ class ClRunner(object):
             Wt_cl,
             gradI_cl,
             bsum_cl,
-            K, M, P, Q, N, T, R, S, C, D, H, W,
             *args
         )
 
@@ -139,7 +84,6 @@ class ClRunner(object):
             gradO_cl,
             gradW_cl,
             bsum_gpudata,
-            C, D, H, W, N, T, R, S, K, M, P, Q,
             *args):
 
         # create dummy one for bsum for now?
@@ -153,63 +97,6 @@ class ClRunner(object):
             gradO_cl,
             gradW_cl,
             bsum_cl,
-            C, D, H, W, N, T, R, S, K, M, P, Q,
             *args
         )
-
-
-def _get_shuffle_kernel_cl(ctx, dtype):
-    _shuffle_kernel = r"""
-kernel void dimShuffle(
-    global %(type)s* out, global const %(type)s* in,
-    int TRSK, int RSK, int SK, int K,
-    int TRSC, int RSC, int SC, int C,
-    int RS, int T, int R, int S,
-    int div_RS_mul, int div_RS_shift,
-    int div_S_mul,  int div_S_shift)
-{
-    local %(type)s tile[32][33];
-
-    int tx  = get_local_id(0);
-    int ty  = get_local_id(1);
-    int bk  = get_group_id(0);
-    int bc  = get_group_id(1);
-    int trs = get_group_id(2);
-
-    int k  = bk * 32 + tx;
-    int c  = bc * 32 + ty;
-
-    int t  = div_RS_mul * trs; t >>= div_RS_shift;
-    int rs = trs - t*RS;
-
-    int r = div_S_mul * rs; r >>= div_S_shift;
-    int s = rs - r*S;
-
-    for (int j = 0; j < 32; j += 8)
-    {
-        int cj = c + j;
-        if (cj < C && k < K)
-            tile[ty + j][tx] = in[ cj*TRSK + t*RSK + r*SK + s*K + k ];
-    }
-    barrier(CLK_LOCAL_MEM_FENCE);
-
-    k = bk * 32 + ty;
-    c = bc * 32 + tx;
-
-    // Mirror RST
-    s = S - s - 1;
-    r = R - r - 1;
-    t = T - t - 1;
-
-    for (int i = 0; i < 32; i += 8)
-    {
-        int ki = k + i;
-        if (ki < K && c < C)
-            out[ ki*TRSC + t*RSC + r*SC + s*C + c ] = tile[tx][ty + i];
-    }
-}
-"""
-    code = _shuffle_kernel % _ew_types[dtype]
-    module = cl.Program(ctx, code).build()
-    return module
 

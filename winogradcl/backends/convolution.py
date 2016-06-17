@@ -21,7 +21,9 @@ import sys
 from winogradcl.backends.cuda_templates import _ew_types
 from winogradcl.util.math_helper import get_div_mul_shift_32, get_div_mul_shift_64, ceil_div
 from winogradcl.backends.kernels.cl import convolution_cl
-from winogradcl.backends.kernels.cl.clrunner import ClRunner, ShuffleRunner
+from winogradcl.backends.kernels.cl.clrunner import ClRunner
+from winogradcl.backends.kernels.cl.clshuffler import ShuffleRunner
+from winogradcl.backends.kernels.cl.callkernel import call_cl_kernel
 
 
 if sys.version_info >= (3, 0):
@@ -162,7 +164,7 @@ class BpropCuda(KernelGroup):
         # generate the kernel args for dim shuffling CTRSK => KTRSC
         shuffle_grid = (ceil_div(K, 32), ceil_div(C, 32), R*S*T)
         self.shuffle_size = C*T*R*S*K*dtype.itemsize
-        self.shuffle_args = [shuffle_grid, (32, 8, 1), None, None, None]
+        self.shuffle_args = [shuffle_grid, (32, 8, 1), None, None]
         self.shuffle_args.extend(_flatten([
             R*S*T*K, R*S*K, S*K, K,
             R*S*T*C, R*S*C, S*C, C,
@@ -180,7 +182,7 @@ class BpropCuda(KernelGroup):
 
         Wt = self.lib.scratch_buffer(self.shuffle_size)
 
-        self.shuffle_args[2:5] = (self.lib.stream, Wt, W.gpudata)
+        self.shuffle_args[2:4] = (Wt, W.gpudata)
         self.launch_args[2:9] = (self.lib.stream, alpha, beta,
                                  gradO.gpudata, Wt, gradI.gpudata, bsum_gpudata)
 
@@ -194,7 +196,7 @@ class BpropCuda(KernelGroup):
             self.clRunner.execute_bprop(*self.launch_args, shared_size=self.shared)
         if unbind:
             self.bsum_zero = None
-            self.shuffle_args[2:5] = (None,) * 3
+            self.shuffle_args[2:4] = (None,) * 2
             self.launch_args[2:9] = (None,) * 7
 
     def __str__(self):
