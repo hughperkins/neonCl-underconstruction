@@ -28,7 +28,6 @@ def shuffle(ctx, queue, src, src_shape, dst):
     # where B is product of the dimensions other than first and last
     A = src_shape[0]
     C = src_shape[-1]
-    # B = np.prod(src_shape[1:-1])
     B = functools.reduce(mul, src_shape[1:-1])
 
     grid = (ceil_div(C, 32), ceil_div(A, 32), B)
@@ -44,17 +43,6 @@ def shuffle(ctx, queue, src, src_shape, dst):
         dst, src,
         B * C, C,
         A * B, A)
-
-    # self.shuffle_size = first_length * T*R*S*K*dtype.itemsize
-    #self.shuffle_args = [shuffle_grid, (32, 8, 1), None, None, None]
-    #self.shuffle_args.extend(_flatten([
-    #    R*S*T*K, R*S*K, S*K, K,
-    #    R*S*T*C, R*S*C, S*C, C,
-    #    R*S, T, R, S, magic_RS, magic_S]))
-
-    #lib.set_scratch_size(self.shuffle_size)
-    #shuffleRunner = ShuffleRunner(ctx=ctx, q=queue, dtype=np.float32)
-    #shuffleRunner.execute(shuffle_grid, (32, 8, 1), None, dst, src)
 
 # def fprop(ctx, queue, I, I_layout, W, W_layout, O, O_layout):
 def fprop(ctx, queue, I, I_shape, W, W_shape, O, O_shape):
