@@ -4,7 +4,7 @@ A port of nervana neon Kepler convolution kernels to OpenCL.
 
 The original neon, documentation etc is at https://github.com/nervanasystems/neon
 
-Note that Kepler kernels are not the fast SASS ones, but they're fairly ok :-)
+Note that Kepler kernels are not the fast SASS Winograd ones, but they're fairly ok :-)
 
 ## Installation
 
@@ -37,17 +37,7 @@ Please see [neon-benchmarks](https://github.com/hughperkins/neon-benchmarks/blob
 
 ## Status
 
-Working :-)
-
-## Future evolutions
-
-Next up:
-- create simple API
-- add to cltorch
-
-Medium-term:
-- make work on Intel HD GPU (I have one)
-- make work on AMD GPU (either someone else can do this, or I can do it, if someone can provide me with a cloud-hosted one)
+Under construction
 
 ## Implementation notes
 
