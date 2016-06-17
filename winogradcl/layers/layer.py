@@ -224,8 +224,7 @@ class Convolution(ParameterLayer):
 
     def fprop(self, inputs, inference=False, beta=0.0):
         self.inputs = inputs
-        self.be.fprop_conv(self.nglayer, inputs, self.W, self.outputs, beta=beta,
-                           bsum=self.batch_sum)
+        self.be.fprop_conv(self.nglayer, inputs, self.W, self.outputs, beta=beta)
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):

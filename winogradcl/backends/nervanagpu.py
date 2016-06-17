@@ -204,24 +204,23 @@ class NervanaGPU(Backend):
               outputs an fp32 tensor of size Kx1
         """
         return ConvLayer(self, dtype, N, C, K, D, H, W, T, R, S,
-                         pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                         bsum)
+                         pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
-    def fprop_conv(self, layer, I, F, O, alpha=1.0, beta=0.0, bsum=None, repeat=1):
+    def fprop_conv(self, layer, I, F, O, alpha=1.0, beta=0.0, repeat=1):
         assert layer.sizeI == I.size
         assert layer.sizeF == F.size
         assert layer.sizeO == O.size
 
-        layer.fprop_kernels.bind_params(I, F, O, alpha, beta, bsum)
+        layer.fprop_kernels.bind_params(I, F, O, alpha, beta)
 
         return self._execute_conv("fprop", layer, layer.fprop_kernels, repeat)
 
-    def bprop_conv(self, layer, gradO, W, gradI, alpha=1.0, beta=0.0, bsum=None, repeat=1):
+    def bprop_conv(self, layer, gradO, W, gradI, alpha=1.0, beta=0.0, repeat=1):
         assert layer.sizeO == gradO.size
         assert layer.sizeF == W.size
         assert layer.sizeI == gradI.size
 
-        layer.bprop_kernels.bind_params(gradO, W, gradI, alpha, beta, bsum)
+        layer.bprop_kernels.bind_params(gradO, W, gradI, alpha, beta)
 
         return self._execute_conv("bprop", layer, layer.bprop_kernels, repeat)
 

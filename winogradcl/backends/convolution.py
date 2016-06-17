@@ -71,8 +71,8 @@ class FpropCuda(KernelGroup):
                  T, R, S,
                  M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w,
-                 bsum):
+                 str_d, str_h, str_w
+                 ):
 
         super(FpropCuda, self).__init__(lib, dtype)
 
@@ -88,7 +88,7 @@ class FpropCuda(KernelGroup):
         PQ = P * Q
         PQN = PQ * N
         self.clRunner = ClRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype.str[1:], filter_size=R*S,
-                                       bsum=bsum, operation="fprop")
+                                       operation="fprop")
         grid = (PQ * (-(-N // 32)), (-(-K // 32)), 1)
         block = (8, 8, 1)
         static_kernel_args = _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
@@ -96,25 +96,21 @@ class FpropCuda(KernelGroup):
                                        HWN // 4, KRST // 4, PQN // 4,
                                        PQ, 0, 0,
                                        div_PQ_mul_shift, div_Q_mul_shift, div_S_mul_shift])
-        self.launch_args = [grid, block] + [None] * 6 + static_kernel_args
+        self.launch_args = [grid, block] + [None] * 5 + static_kernel_args
 
         self.shared = RST * 4 * 2
-        self.flags = (bsum and 4)
 
-    def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
+    def bind_params(self, I, F, O, alpha, beta, flags=0):
         assert I.dtype == F.dtype == O.dtype
-        bsum_gpudata, flags = self.init_bsum(bsum, flags)
-        self.launch_args[2:8] = (alpha, beta,
-                                 I.gpudata, F.gpudata, O.gpudata, bsum_gpudata)
+        # bsum_gpudata, flags = self.init_bsum(bsum, flags)
+        self.launch_args[2:7] = (alpha, beta,
+                                 I.gpudata, F.gpudata, O.gpudata)
 
     def execute(self, repeat=1, unbind=True):
         for r in range(repeat):
-            if self.bsum_zero:
-                drv.memset_d32_async(*self.bsum_zero)
-            self.clRunner.execute_fprop(*self.launch_args, shared_size=self.shared)
+            self.clRunner.execute_fprop(*self.launch_args)
         if unbind:
-            self.bsum_zero = None
-            self.launch_args[2:8] = (None,) * 6
+            self.launch_args[2:7] = (None,) * 5
 
     def __str__(self):
         return "FpropCuda"
@@ -127,8 +123,8 @@ class BpropCuda(KernelGroup):
                  T, R, S,
                  M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w,
-                 bsum):
+                 str_d, str_h, str_w
+                 ):
 
         super(BpropCuda, self).__init__(lib, dtype)
 
@@ -146,9 +142,9 @@ class BpropCuda(KernelGroup):
         PQ = P * Q
         PQN = PQ * N
 
-        self.bsum = bsum
+        # self.bsum = bsum
         self.clRunner = ClRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype.str[1:], filter_size=R*S,
-                                       bsum=bsum, operation="bprop")
+                                       operation="bprop")
         grid = (HW * (-(-N // 32)), -(-C // 32), 1)
         block = (8, 8, 1)
         static_kernel_args = _flatten([K, M, P, Q, N, T, R, S, C, D, H, W,
@@ -156,10 +152,10 @@ class BpropCuda(KernelGroup):
                                        PQN // 4, CRST // 4, HWN // 4,
                                        HW, 0, 0,
                                        div_HW_mul_shift, div_W_mul_shift, div_S_mul_shift])
-        self.launch_args = [grid, block] + [None] * 6 + static_kernel_args
+        self.launch_args = [grid, block] + [None] * 5 + static_kernel_args
 
         self.shared = R*S*T * 4 * 2
-        self.flags = (bsum and 4)
+        # self.flags = (bsum and 4)
 
         # generate the kernel args for dim shuffling CTRSK => KTRSC
         shuffle_grid = (ceil_div(K, 32), ceil_div(C, 32), R*S*T)
@@ -173,31 +169,24 @@ class BpropCuda(KernelGroup):
         lib.set_scratch_size(self.shuffle_size)
         self.shuffleRunner = ShuffleRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype)
 
-    def bind_params(self, gradO, W, gradI, alpha, beta, bsum, flags=0):
+    def bind_params(self, gradO, W, gradI, alpha, beta, flags=0):
         assert gradO.dtype == W.dtype == gradI.dtype
-        if self.bsum:
-            assert bsum is not None, "must use initialized bsum config"
-
-        bsum_gpudata, flags = self.init_bsum(bsum, flags)
 
         Wt = self.lib.scratch_buffer(self.shuffle_size)
 
         self.shuffle_args[2:4] = (Wt, W.gpudata)
-        self.launch_args[2:8] = (alpha, beta,
-                                 gradO.gpudata, Wt, gradI.gpudata, bsum_gpudata)
+        self.launch_args[2:7] = (alpha, beta,
+                                 gradO.gpudata, Wt, gradI.gpudata)
 
     def execute(self, repeat=1, unbind=True):
         C = self.shuffle_args[12]
         assert C >= 4, "C dim must be 4 or greater for CUDA C backprop kernel"
         for r in range(repeat):
-            if self.bsum_zero:
-                drv.memset_d32_async(*self.bsum_zero)
             self.shuffleRunner.execute(*self.shuffle_args)
-            self.clRunner.execute_bprop(*self.launch_args, shared_size=self.shared)
+            self.clRunner.execute_bprop(*self.launch_args)
         if unbind:
-            self.bsum_zero = None
             self.shuffle_args[2:4] = (None,) * 2
-            self.launch_args[2:8] = (None,) * 6
+            self.launch_args[2:7] = (None,) * 5
 
     def __str__(self):
         return "BpropCuda"
@@ -239,7 +228,7 @@ class UpdateCuda(KernelGroup):
         div_Q_mul_shift = get_div_mul_shift_64(grid_Q)
 
         self.clRunner = ClRunner(ctx=self.lib.cl_ctx, q=self.lib.q, dtype=self.dtype.str[1:], filter_size=R*S,
-                                       bsum=False, operation="update")
+                                       operation="update")
         grid = (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1)
         block = (8, 32, 1)
         static_kernel_args = _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
@@ -247,7 +236,7 @@ class UpdateCuda(KernelGroup):
                                        HWN // 4, KRST // 4, PQN // 4,
                                        PQ, grid_P, grid_Q,
                                        div_PQ_mul_shift, div_Q_mul_shift, div_S_mul_shift])
-        self.launch_args = [grid, block] + [None] * 6 + static_kernel_args
+        self.launch_args = [grid, block] + [None] * 5 + static_kernel_args
 
         lib.set_scratch_size((self.determ or C*T*R*S*K)*4)
 
@@ -288,9 +277,9 @@ class UpdateCuda(KernelGroup):
         self.zero_args = [update_temp, 0, gradW.size, self.lib.stream]
 
         beta = 0.0
-        bsum_gpudata = 0
-        self.launch_args[2:8] = (alpha, beta,
-                                 I.gpudata, gradO.gpudata, gradW.gpudata, bsum_gpudata)
+        # bsum_gpudata = 0
+        self.launch_args[2:7] = (alpha, beta,
+                                 I.gpudata, gradO.gpudata, gradW.gpudata)
 
     def execute(self, repeat=1, unbind=True):
         for r in range(repeat):
@@ -301,7 +290,7 @@ class UpdateCuda(KernelGroup):
 
         if unbind:
             self.zero_args = self.convert_args = None
-            self.launch_args[2:8] = (None,) * 6
+            self.launch_args[2:7] = (None,) * 5
 
     def __str__(self):
         return "UpdateCuda"

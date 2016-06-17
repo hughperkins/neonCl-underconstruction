@@ -79,8 +79,7 @@ class ConvLayer(Layer):
                  D=1, H=1, W=1,
                  T=1, R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
-                 str_d=1, str_h=1, str_w=1,
-                 bsum=False):
+                 str_d=1, str_h=1, str_w=1):
         super(ConvLayer, self).__init__(lib, dtype, N, np.float32)
 
         # Compute the output spatial dimensions
@@ -99,7 +98,7 @@ class ConvLayer(Layer):
         self.MPQ = (M, P, Q)
         self.padding = (pad_d, pad_h, pad_w)
         self.strides = (str_d, str_h, str_w)
-        self.bsum = bsum
+        # self.bsum = bsum
 
         self.all_params = (N, C, K, D, H, W, T, R, S, pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
@@ -124,10 +123,10 @@ class ConvLayer(Layer):
             raise ValueError("3D Convolution not supported by CUDA C kernels.")
 
         self.fprop_kernels = convolution.FpropCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                                                   pad_d, pad_h, pad_w, str_d, str_h, str_w, bsum=bsum)
+                                                   pad_d, pad_h, pad_w, str_d, str_h, str_w)
         # TODO small C bprop?
         self.bprop_kernels = convolution.BpropCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                                                   pad_d, pad_h, pad_w, str_d, str_h, str_w, bsum=bsum)
+                                                   pad_d, pad_h, pad_w, str_d, str_h, str_w)
         self.updat_kernels = convolution.UpdateCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                                                     pad_d, pad_h, pad_w, str_d, str_h, str_w)
 

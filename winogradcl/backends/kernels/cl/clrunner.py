@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+# import time
 import numpy as np
 import pyopencl as cl
 from winogradcl.backends.cuda_templates import _ew_types
@@ -23,80 +23,31 @@ from winogradcl.backends.kernels.cl.callkernel import call_cl_kernel
 mf = cl.mem_flags
 
 class ClRunner(object):
-    def __init__(self, ctx, q, dtype, filter_size, bsum, operation):
+    def __init__(self, ctx, q, dtype, filter_size, operation):
         self.ctx = ctx
         self.q = q
         self.dtype = dtype
         self.filter_size = filter_size
-        self.bsum = bsum
         self.operation = operation
         self.kernel = convolution_cl._get_conv_kernel(
             ctx=ctx, options='', dtype=self.dtype, filter_size=self.filter_size,
-            bsum=self.bsum, operation=self.operation)
+            operation=self.operation)
 
-    def execute_fprop(self, grid, block, alpha, beta, I_cl, W_cl, O_cl, bsum_gpudata,
-        *args, shared_size):
-
-        # create dummy one for bsum for now?
-        bsum_cpu = np.zeros((1,), dtype=np.float32)
-        bsum_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=bsum_cpu)
-
-        blockDim = len(block)
-        if blockDim == 3:
-            globalSize = (block[0] * grid[0], block[1] * grid[1], block[2] * grid[2])  # hacky? what do you mean? :-P
-        else:
-            raise Exception('not implemented')
-
+    def execute_fprop(self, *args):
         call_cl_kernel(self.kernel.conv_fprop,
-            self.q, grid, block,
-            alpha, beta,
-            I_cl,
-            W_cl,
-            O_cl,
-            bsum_cl,
+            self.q,
             *args
         )
 
-    def execute_bprop(self, grid, block, alpha, beta, 
-            gradO_cl,
-            Wt_cl,
-            gradI_cl,
-            bsum_gpudata,
-            *args, shared_size):
-
-        # create dummy one for bsum for now?
-        bsum_cpu = np.zeros((1,), dtype=np.float32)
-        bsum_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=bsum_cpu)
-
+    def execute_bprop(self, *args):
         call_cl_kernel(self.kernel.conv_bprop,
-            self.q, grid, block,
-            alpha, beta,
-            gradO_cl,
-            Wt_cl,
-            gradI_cl,
-            bsum_cl,
+            self.q,
             *args
         )
 
-    def execute_update(
-            self, grid, block, alpha, beta,
-            I_cl,
-            gradO_cl,
-            gradW_cl,
-            bsum_gpudata,
-            *args):
-
-        # create dummy one for bsum for now?
-        bsum_cpu = np.zeros((1,), dtype=np.float32)
-        bsum_cl = cl.Buffer(self.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=bsum_cpu)
-
+    def execute_update(self, *args):
         call_cl_kernel(self.kernel.conv_update,
-            self.q, grid, block, 
-            alpha, beta,
-            I_cl,
-            gradO_cl,
-            gradW_cl,
-            bsum_cl,
+            self.q,
             *args
         )
 

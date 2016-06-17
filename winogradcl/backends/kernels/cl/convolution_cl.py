@@ -18,7 +18,7 @@ from winogradcl.util.math_helper import get_div_mul_shift_64
 from winogradcl.backends.cuda_templates import _ew_types
 import pyopencl as cl
 
-def _get_conv_kernel(ctx, options, dtype, filter_size, bsum, operation, filter_bounds_check=False, debug=False):
+def _get_conv_kernel(ctx, options, dtype, filter_size, operation, filter_bounds_check=False, debug=False):
     """
     Builds the convolution kernel for a specified filter size.
 
@@ -35,7 +35,7 @@ def _get_conv_kernel(ctx, options, dtype, filter_size, bsum, operation, filter_b
             not a multiple of 32.
         debug (boolean): When set to true, kernels will be compiled with debug symbols.
     """
-    assert not bsum
+    # assert not bsum
     assert operation in ["fprop", "bprop", "update"]
     if operation == "fprop" or operation == "update":
         lut_code = r"""
@@ -127,7 +127,7 @@ def _get_conv_kernel(ctx, options, dtype, filter_size, bsum, operation, filter_b
         }
     }
 """
-    bsum_code = ""
+    # bsum_code = ""
 
     if operation == "update":
         a_name = "image"
@@ -223,7 +223,6 @@ kernel void conv_%(operation)s(
                            global Matrix *I,
                            global Matrix *F,
                            global Matrix *O,
-                           global float* bsum,
                            int C, int D, int H, int W, int N,
                            int T, int R, int S, int K,
                            int M, int P, int Q,
@@ -382,7 +381,6 @@ kernel void conv_%(operation)s(
             if(filter_id < K)
             {
                 int out_index = (filter_id * output_filter_size) + output_pixel + image_id;
-                %(bsum_code)s
 
                 Matrix cur_value;
                 cur_value.f4 = (float4)0.0f;
@@ -676,7 +674,6 @@ static inline float shfl(float value, int lane) {
         "shift_filter_size":    div_filtersize_mul_shift[1],
         "type":                 _ew_types[dtype]["type"],
         "lut_code":             lut_code,
-        "bsum_code":            bsum_code,
         "operation":            operation,
         "a_name":               a_name,
         "b_name":               b_name,
