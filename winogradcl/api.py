@@ -17,32 +17,30 @@ import numpy as np
 from operator import mul
 import functools
 
-kernels = {}
 
-def shuffle(ctx, queue, src, src_shape, dst):
-    global kernels
-
+class Shuffler(object):
     # will shuffle src into dst, transposing first and last dimensions
     # dimensions are taken to be:
     # A B C
     # where B is product of the dimensions other than first and last
-    A = src_shape[0]
-    C = src_shape[-1]
-    B = functools.reduce(mul, src_shape[1:-1])
+    def __init__(self, ctx, src_shape):
+        self.kernel = get_shuffle_kernel_d3_cl(ctx, 'f4')
+        self.A = src_shape[0]
+        self.C = src_shape[-1]
+        self.B = functools.reduce(mul, src_shape[1:-1])
+        self.grid = (ceil_div(self.C, 32), ceil_div(self.A, 32), self.B)
+        self.block = (32, 8, 1)
+        self.BC = self.B * self.C
+        self.AB = self.A * self.B
 
-    grid = (ceil_div(C, 32), ceil_div(A, 32), B)
-    block = (32, 8, 1)
-    kernel_name = 'shuffle_f4'
-    kernel = kernels.get(kernel_name, None)
-    if kernel is None:
-        kernel = get_shuffle_kernel_d3_cl(ctx, 'f4')
-        kernels[kernel_name] = kernel
+    def shuffle(self, queue, dst, src):
+        call_cl_kernel(
+            self.kernel, queue,
+            self.grid, self.block,
+            dst, src,
+            self.BC, self.C,
+            self.AB, self.A)
 
-    call_cl_kernel(kernel, queue,
-        grid, block,
-        dst, src,
-        B * C, C,
-        A * B, A)
 
 # def fprop(ctx, queue, I, I_layout, W, W_layout, O, O_layout):
 def fprop(ctx, queue, I, I_shape, W, W_shape, O, O_shape):
@@ -52,4 +50,23 @@ def fprop(ctx, queue, I, I_shape, W, W_shape, O, O_shape):
     - for W:  'Ci H W Co'
     - for O:  'C H W N'
     """
+    Ci = W_shape[0]
+    Co = W_shape[3]
+    kH = W_shape[1]
+    kW = W_shape[2]
+    iH = I_shape[1]
+    iW = I_shape[2]
+    padH = kH // 2
+    padW = kW // 2
+    assert padH == padW
+    conv = Convolution((kH, kW, Co), strides=1, padding=1, be=be) #, init=init)
+    conv.configure((Ci, iH, iW))
+    conv.W = W
+    conv.outputs = O
+
+def bprop_gradW(ctx, queue, gradO, gradO_shape, W, W_shape, gradW, gradW_shape):
+    pass
+
+def bprop_gradI(ctx, queue, gradO, gradO_shape, W, W_shape, gradI, gradI_shape):
+    pass
 
