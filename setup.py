@@ -54,7 +54,7 @@ if write_version:
     txt += "# limitations under the License.\n"
     txt += "# " + ("-" * 77) + "\n"
     txt += "\"\"\"\n%s\n\"\"\"\nVERSION = '%s'\nSHORT_VERSION = '%s'\n"
-    fname = os.path.join(os.path.dirname(__file__), 'winogradcl', 'version.py')
+    fname = os.path.join(os.path.dirname(__file__), 'neoncl', 'version.py')
     a = open(fname, 'w')
     try:
         a.write(txt % ("Project version information.", FULLVERSION, VERSION))
@@ -62,13 +62,13 @@ if write_version:
         a.close()
 
 
-setup(name='winogradcl',
+setup(name='neoncl',
       version=VERSION,
-      description="OpenCL port of Nervana's Kepler Winograd kernels",
+      description="OpenCL port of Nervana's kernels",
       long_description=open('README.md').read(),
       author='Hugh Perkins',
       author_email='hughperkins@gmail.com',
-      url='http://github.com/hughperkins/winogradCl-underconstruction',
+      url='http://github.com/hughperkins/neonCl-underconstruction',
       license='License :: OSI Approved :: Apache Software License',
       scripts=[],
       packages=find_packages(exclude=["tests"]),

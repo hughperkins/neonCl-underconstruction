@@ -14,8 +14,8 @@
 """
 For now this will only do fprop.  that's probably non-trivial enough for now...
 """
-from winogradcl.util.math_helper import get_div_mul_shift_64
-from winogradcl.backends.cuda_templates import _ew_types
+from neoncl.util.math_helper import get_div_mul_shift_64
+from neoncl.backends.cuda_templates import _ew_types
 import pyopencl as cl
 
 def _get_conv_kernel(ctx, options, dtype, filter_size, operation, filter_bounds_check=False, debug=False):

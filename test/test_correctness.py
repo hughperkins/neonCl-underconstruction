@@ -17,7 +17,7 @@ from __future__ import print_function
 import numpy as np
 import time
 import pyopencl as cl
-from winogradcl import api
+from neoncl import api
 
 #from winogradcl.backends.kernels.cl.mycltensor import MyClTensor
 #from winogradcl.layers.layer import Convolution

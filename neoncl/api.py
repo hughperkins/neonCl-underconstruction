@@ -9,15 +9,15 @@ approximate guidelines/requirements:
 - library can/should provide a means to provide required dimensions of buffers to caller
 - library will check dimensions of incoming buffers
 """
-# from winogradcl.backends.kernels.cl import ShuffleRunner
-from winogradcl.backends.kernels.cl.clshuffler import get_shuffle_kernel_d3_cl
-from winogradcl.backends.kernels.cl.callkernel import call_cl_kernel
-from winogradcl.util.math_helper import ceil_div
+# from neoncl.backends.kernels.cl import ShuffleRunner
+from neoncl.backends.kernels.cl.clshuffler import get_shuffle_kernel_d3_cl
+from neoncl.backends.kernels.cl.callkernel import call_cl_kernel
+from neoncl.util.math_helper import ceil_div
 import numpy as np
 import pyopencl as cl
 from operator import mul
 import functools
-from winogradcl.backends.convolution import FpropCuda, BpropCuda, UpdateCuda
+from neoncl.backends.convolution import FpropCuda, BpropCuda, UpdateCuda
 
 
 mf = cl.mem_flags

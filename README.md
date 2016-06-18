@@ -18,8 +18,8 @@ NVIDIA)
 ### Procedure
 
 ```
-git clone https://github.com/hughperkins/winogradCl-underconstruction winogradCl
-cd winogradCl
+git clone https://github.com/hughperkins/neonCl-underconstruction neonCl
+cd neonCl
 bash install.sh
 ```
 Before running any script, do:

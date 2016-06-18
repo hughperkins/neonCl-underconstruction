@@ -1,6 +1,6 @@
 import numpy as np
 import pyopencl as cl
-from winogradcl.backends.cuda_templates import _ew_types
+from neoncl.backends.cuda_templates import _ew_types
 
 # shuffles ABC => CBA
 # grid is:  (ceil_div(C, 32), ceil_div(A, 32), B)

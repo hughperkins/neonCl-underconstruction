@@ -18,11 +18,11 @@ Python code to wrap convolution kernels
 import numpy as np
 import pyopencl as cl
 import sys
-from winogradcl.backends.cuda_templates import _ew_types
-from winogradcl.util.math_helper import get_div_mul_shift_32, get_div_mul_shift_64, ceil_div
-from winogradcl.backends.kernels.cl import convolution_cl
-from winogradcl.backends.kernels.cl.clshuffler import get_shuffle_kernel_cl
-from winogradcl.backends.kernels.cl.callkernel import call_cl_kernel
+from neoncl.backends.cuda_templates import _ew_types
+from neoncl.util.math_helper import get_div_mul_shift_32, get_div_mul_shift_64, ceil_div
+from neoncl.backends.kernels.cl import convolution_cl
+from neoncl.backends.kernels.cl.clshuffler import get_shuffle_kernel_cl
+from neoncl.backends.kernels.cl.callkernel import call_cl_kernel
 
 
 if sys.version_info >= (3, 0):
