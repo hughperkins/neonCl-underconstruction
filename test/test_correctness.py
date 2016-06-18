@@ -19,10 +19,6 @@ import time
 import pyopencl as cl
 from neoncl import api
 
-#from winogradcl.backends.kernels.cl.mycltensor import MyClTensor
-#from winogradcl.layers.layer import Convolution
-#from winogradcl.backends.make_backend import make_backend
-
 its = 1
 
 mf = cl.mem_flags
@@ -70,7 +66,8 @@ def check_gradWeights(O, I, W, gradO, gradW, ci, h, w, co, eps=1e-2):
                     sum += v
     cpu_value = sum
     gpu_value = gradW[ci, kh, kw, co]
-    print('checkGradW gpu', gpu_value, 'cpu', cpu_value)
+    diff =  abs(cpu_value - gpu_value)
+    print('checkGradW gpu=%.6f cpu=%.6f diff=%.6f' % (gpu_value, cpu_value, diff))
     assert abs(cpu_value - gpu_value) < eps
 
 def check_gradI(O, I, W, gradO, gradI, c, h, w, n, eps=1e-4):
@@ -103,7 +100,8 @@ def check_gradI(O, I, W, gradO, gradI, c, h, w, n, eps=1e-4):
                     sum += v
     cpu_value = sum
     gpu_value = gradI[c, ih, iw, n]
-    print('checkGradI gpu', gpu_value, 'cpu', cpu_value)
+    diff =  abs(cpu_value - gpu_value)
+    print('checkGradI gpu=%.6f cpu=%.6f diff=%.6f' % (gpu_value, cpu_value, diff))
     assert abs(cpu_value - gpu_value) < eps
 
 def checkO(O, W, I, c, h, w, n, eps=1e-4):
@@ -132,11 +130,12 @@ def checkO(O, W, I, c, h, w, n, eps=1e-4):
                     sum += v
     cpu_value = sum
     gpu_value = O[c*iH*iW + h*iW + w,n]
-    print('checkO c', c, 'h', h, 'w', w, 'n', n, 'cpu %.6f gpu %.6f' % (sum, gpu_value))
-    assert abs(sum - gpu_value) < eps
+    diff =  abs(cpu_value - gpu_value)
+    print('checkO c', c, 'h', h, 'w', w, 'n', n, 'cpu %.6f gpu %.6f diff %.6f' % (sum, gpu_value, diff))
+    assert diff < eps
     return ""
 
-class MyTensor(object):
+class MyTefnsor(object):
     def __init__(self, gpudata, shape, size):
         self.gpudata = gpudata
         self.size = size
@@ -201,25 +200,14 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     scratch = np.zeros(scratch_size, dtype=np.float32)
     scratch_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=scratch)
 
-    convolver.fprop(ctx, q, I_cl, W_cl, O_cl)
-    convolver.bprop_gradW(ctx, q, I_cl, gradO_cl, gradW_cl)
-    convolver.bprop_gradI(ctx, q, gradO_cl, W_cl, gradI_cl, scratch_cl)
-    # convolver.bprop_gradW(ctx, q,I_cl, gradO_cl, gradW_cl)
+    convolver.fprop(q, I_cl, W_cl, O_cl)
+    convolver.bprop_gradW(q, I_cl, gradO_cl, gradW_cl)
+    convolver.bprop_gradI(q, gradO_cl, W_cl, gradI_cl, scratch_cl)
 
     cl.enqueue_copy(q, O, O_cl)
     cl.enqueue_copy(q, gradW, gradW_cl)
     cl.enqueue_copy(q, gradI, gradI_cl)
 
-    #conv.deltas = gradI_cl
-    #conv.dW = gradW_cl
-
-    #print('gradO_cl', gradO_cl)
-    #conv.bprop(gradO_cl)
-#        cuda.Context.synchronize()
-
-#    O = O_cl.get()
-    #gradI_cl.to_host()
-    #gradW_cl.to_host()
     return {
         'gradI': gradI, 'gradO': gradO, 'W': W,
         'gradW': gradW, 'O': O, 'I': I}

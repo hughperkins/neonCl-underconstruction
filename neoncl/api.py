@@ -76,6 +76,7 @@ class Convolver(object):
         - for W:  'Ci H W Co'
         - for O:  'C H W N'
         """
+        self.ctx = ctx
         self.Ci = Ci
         self.Co = Co
         self.iH = iH
@@ -86,17 +87,7 @@ class Convolver(object):
         oH = output_dim(False, iH, kH, padH, 1)
         oW = output_dim(False, iW, kW, padW, 1)
 
-        # Ci = W_shape[0]
-        # Co = W_shape[3]
-        # kH = W_shape[1]
-        # kW = W_shape[2]
-        # iH = I_shape[1]
-        # iW = I_shape[2]
-        # padH = kH // 2
-        # padW = kW // 2
         assert padH == padW
-        # self.conv = Convolution((kH, kW, Co), strides=1, padding=padH, be=be) #, init=init)
-        # self.conv.configure((Ci, iH, iW))
         self.fpropcuda = FpropCuda(ctx, 'f4',
             N, Ci, Co,
             1, iH, iW,
@@ -153,16 +144,15 @@ class Convolver(object):
     def getGradOShape(self):
         return self.getOShape()
 
-    # def fprop(ctx, queue, I, I_layout, W, W_layout, O, O_layout):
-    def fprop(self, ctx, queue, I, W, O, scratch=None):
+    def fprop(self, queue, I, W, O, scratch=None):
         self.fpropcuda.bind_params(I, W, O, 1.0, 0.0)
         self.fpropcuda.execute(queue)
 
-    def bprop_gradW(self, ctx, queue, I, gradO, gradW, scratch=None):
+    def bprop_gradW(self, queue, I, gradO, gradW, scratch=None):
         self.updatecuda.bind_params(I, gradO, gradW, 1.0)
         self.updatecuda.execute(queue)
 
-    def bprop_gradI(self, ctx, queue, gradO, W, gradI, scratch):
+    def bprop_gradI(self, queue, gradO, W, gradI, scratch):
         Wt = scratch
         self.bpropcuda.shuffle(queue, Wt, W)
         self.bpropcuda.bind_params(gradO, Wt, gradI, 1.0, 0.0)
