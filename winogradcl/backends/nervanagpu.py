@@ -213,7 +213,7 @@ class NervanaGPU(Backend):
 
         layer.fprop_kernels.bind_params(I, F, O, alpha, beta)
 
-        return self._execute_conv("fprop", layer, layer.fprop_kernels, repeat)
+        layer.fprop_kernels.execute(repeat)
 
     def bprop_conv(self, layer, gradO, W, gradI, alpha=1.0, beta=0.0, repeat=1):
         assert layer.sizeO == gradO.size
@@ -221,8 +221,7 @@ class NervanaGPU(Backend):
         assert layer.sizeI == gradI.size
 
         layer.bprop_kernels.bind_params(gradO, W, gradI, alpha, beta)
-
-        return self._execute_conv("bprop", layer, layer.bprop_kernels, repeat)
+        layer.bprop_kernels.execute(repeat)
 
     def update_conv(self, layer, I, gradO, gradW, alpha=1.0, repeat=1):
         assert layer.sizeI == I.size
@@ -230,35 +229,8 @@ class NervanaGPU(Backend):
         assert layer.sizeF == gradW.size
 
         layer.updat_kernels.bind_params(I, gradO, gradW, alpha)
+        layer.updat_kernels.execute(repeat)
 
-        return self._execute_conv("updat", layer, layer.updat_kernels, repeat)
-
-    def _execute_conv(self, op, layer, kernels, repeat):
-        # Warmup
-        if repeat > 1:
-            kernels.execute(max(repeat // 10, 1), unbind=False)
-
-        if self.bench or repeat > 1:
-            start, end = _get_events()
-            start.record(stream=self.stream)
-
-        kernels.execute(repeat)
-
-#        TODO not sure if this part is needed for cuda kernels?
-#        if convert_type:
-#            _fp_convert(C_gpudata, convert_type, C, reduce_shape,
-#                        self.compute_capability)
-
-        if self.bench or repeat > 1:
-            end.record(stream=self.stream)
-            end.synchronize()
-            msecs  = end.time_since(start) / repeat
-            gflops = layer.flops / (msecs * 1000000.0)
-            #if layer.TRS[2] == 3:
-            print("%7.3f msecs %5.0f gflops %6.0f (%s: %s)" %
-                  (msecs, gflops, layer.flops/1000000.0, op, layer))
-            return msecs, gflops
-        return 0, 0
 
 # debugging tool
 # import re
