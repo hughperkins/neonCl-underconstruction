@@ -1,6 +1,6 @@
 # WinogradCl
 
-A port of nervana neon Kepler convolution kernels to OpenCL.
+A port of nervana neon Kepler direct convolution kernels to OpenCL.
 
 The original neon, documentation etc is at https://github.com/nervanasystems/neon
 
