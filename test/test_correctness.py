@@ -106,7 +106,7 @@ def check_gradI(O, I, W, gradO, gradI, c, h, w, n, eps=1e-4):
     print('checkGradI gpu', gpu_value, 'cpu', cpu_value)
     assert abs(cpu_value - gpu_value) < eps
 
-def check(O, W, I, c, h, w, n, eps=1e-4):
+def checkO(O, W, I, c, h, w, n, eps=1e-4):
     Ci = W.shape[0]
     iH = I.shape[1]
     iW = I.shape[2]
@@ -234,12 +234,12 @@ def simple1():
     W = res['W']
     gradW = res['gradW']
 
-    check(W=W, I=I, O=O, c=0, h=0, w=0, n=0)
-    check(W=W, I=I, O=O, c=0, h=0, w=0, n=1)
-    check(W=W, I=I, O=O, c=0, h=1, w=0, n=0)
-    check(W=W, I=I, O=O, c=0, h=0, w=1, n=0)
-    check(W=W, I=I, O=O, c=1, h=0, w=0, n=0)
-    check(W=W, I=I, O=O, c=3, h=2, w=1, n=27)
+    checkO(W=W, I=I, O=O, c=0, h=0, w=0, n=0)
+    checkO(W=W, I=I, O=O, c=0, h=0, w=0, n=1)
+    checkO(W=W, I=I, O=O, c=0, h=1, w=0, n=0)
+    checkO(W=W, I=I, O=O, c=0, h=0, w=1, n=0)
+    checkO(W=W, I=I, O=O, c=1, h=0, w=0, n=0)
+    checkO(W=W, I=I, O=O, c=3, h=2, w=1, n=27)
 
     check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=0, w=0, co=0)
     check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=0, w=0, co=1)
@@ -269,12 +269,12 @@ def one():
     W = res['W']
     gradW = res['gradW']
 
-    check(W=W, I=I, O=O, c=0, h=0, w=0, n=0)
-    check(W=W, I=I, O=O, c=0, h=0, w=0, n=1)
-    check(W=W, I=I, O=O, c=0, h=1, w=0, n=0)
-    check(W=W, I=I, O=O, c=0, h=0, w=1, n=0)
-    check(W=W, I=I, O=O, c=1, h=0, w=0, n=0)
-    check(W=W, I=I, O=O, c=3, h=2, w=1, n=27)
+    checkO(W=W, I=I, O=O, c=0, h=0, w=0, n=0)
+    checkO(W=W, I=I, O=O, c=0, h=0, w=0, n=1)
+    checkO(W=W, I=I, O=O, c=0, h=1, w=0, n=0)
+    checkO(W=W, I=I, O=O, c=0, h=0, w=1, n=0)
+    checkO(W=W, I=I, O=O, c=1, h=0, w=0, n=0)
+    checkO(W=W, I=I, O=O, c=3, h=2, w=1, n=27)
 
     check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=0, w=0, co=0)
     check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=0, w=0, co=1)
