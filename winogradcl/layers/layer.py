@@ -86,15 +86,6 @@ class ParameterLayer(Layer):
         self.states = []
         self.owns_delta = True
 
-    @classmethod
-    def gen_class(cls, pdict):
-        if 'init' in pdict and pdict['init'] is not None:
-            cname = pdict['init']['type']
-            icls = load_class(cname)
-            init = icls(**pdict['init']['config'])
-            pdict['init'] = init
-        return cls(**pdict)
-
 
 class Convolution(ParameterLayer):
 
@@ -169,6 +160,4 @@ class Convolution(ParameterLayer):
                                alpha=alpha, beta=beta)
         self.be.update_conv(self.nglayer, self.inputs, error, self.dW)
         return self.deltas
-
-
 
