@@ -180,20 +180,20 @@ class Convolution(ParameterLayer):
         name (str, optional): layer name. Defaults to "ConvolutionLayer"
     """
 
-    def __init__(self, fshape, be, strides={}, padding={}, init=None, bsum=False,
+    def __init__(self, fshape, be, strides={}, padding={}, init=None,
                  name=None):
         super(Convolution, self).__init__(init=init, name=name, be=be)
         self.nglayer = None
-        bsum = bsum and not self.be.deterministic
+        # bsum = bsum and not self.be.deterministic
         self.convparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
                            'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
-                           'T': 1, 'D': 1, 'bsum': bsum}  # 3D paramaters
+                           'T': 1, 'D': 1}  # 3D paramaters
 
         # keep around args in __dict__ for get_description.
         self.fshape = fshape
         self.strides = strides
         self.padding = padding
-        self.bsum = bsum
+        # self.bsum = bsum
 
         if isinstance(fshape, tuple) or isinstance(fshape, list):
             fkeys = ('R', 'S', 'K') if len(fshape) == 3 else ('T', 'R', 'S', 'K')
@@ -218,8 +218,8 @@ class Convolution(ParameterLayer):
             self.out_shape = (K, P, Q) if M == 1 else (K, M, P, Q)
         if self.weight_shape is None:
             self.weight_shape = self.nglayer.dimF2  # (C * R * S, K)
-        if self.convparams['bsum']:
-            self.batch_sum_shape = (self.nglayer.K, 1)
+        # if self.convparams['bsum']:
+        #     self.batch_sum_shape = (self.nglayer.K, 1)
         return self
 
     def fprop(self, inputs, inference=False, beta=0.0):
