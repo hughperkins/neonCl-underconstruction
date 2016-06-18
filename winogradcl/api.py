@@ -79,6 +79,9 @@ class Convolver(object):
         """
         self.Ci = Ci
         self.Co = Co
+        self.iH = iH
+        self.iW = iW
+        self.N = N
         self.kH= kH
         self.kW = kW
         oH = output_dim(False, iH, kH, padH, 1)
@@ -134,19 +137,19 @@ class Convolver(object):
         return self.Ci * self.Co * self.kH * self.kW
 
     def getIShape(self):
-        pass
+        return (self.Ci, self.iH, self.iW, self.N)
 
     def getGradIShape(self):
         return self.getIShape()
 
     def getWShape(self):
-        pass
+        return (self.Ci, self.kH, self.kW, self.Co)
 
     def getGradWShape(self):
         return self.getWShape()
 
     def getOShape(self):
-        pass
+        return (self.Co, self.oH, self.oW, self.N)
 
     def getGradOShape(self):
         return self.getOShape()

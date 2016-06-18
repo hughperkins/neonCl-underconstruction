@@ -34,15 +34,6 @@ class KernelGroup(object):
         self.vec_size = 4
         self.clss = 'sconv'
         self.dtype = dtype
-        # self.lib = lib
-        # self.dtype = dtype
-        # self.dtype_str = dtype.str[1:]
-        # self.vec_size = 4 if dtype.itemsize == 4 else 8
-
-        #if dtype.type is np.float32:
-        #    self.clss = "sconv"
-        #else:
-        #    raise TypeError("dtype not supported.")
 
     def __str__(self):
         raise TypeError("please implement __str__ to describe kernel params for logging.")
