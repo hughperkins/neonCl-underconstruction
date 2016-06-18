@@ -1,5 +1,5 @@
 """
-api for running convolutions using winograd
+api for running OpenCL ports of nervana neon convolutional kernels
 
 status: in progress
 
@@ -9,7 +9,6 @@ approximate guidelines/requirements:
 - library can/should provide a means to provide required dimensions of buffers to caller
 - library will check dimensions of incoming buffers
 """
-# from neoncl.backends.kernels.cl import ShuffleRunner
 from neoncl.backends.kernels.cl.clshuffler import get_shuffle_kernel_d3_cl
 from neoncl.backends.kernels.cl.callkernel import call_cl_kernel
 from neoncl.util.math_helper import ceil_div
