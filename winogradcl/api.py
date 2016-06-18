@@ -14,8 +14,35 @@ from winogradcl.backends.kernels.cl.clshuffler import get_shuffle_kernel_d3_cl
 from winogradcl.backends.kernels.cl.callkernel import call_cl_kernel
 from winogradcl.util.math_helper import ceil_div
 import numpy as np
+import pyopencl as cl
 from operator import mul
 import functools
+from winogradcl.backends.convolution import FpropCuda, BpropCuda
+
+
+mf = cl.mem_flags
+
+def output_dim(caffe_compat, X, S, padding, stride):
+    """
+    compute along 1 dimension, with these sizes, what will be the output dimension
+
+    Arguments:
+        X (int): input data dimension
+        S (int): filter dimension
+        padding (int): padding on each side
+        stride (int): striding
+    """
+
+    if caffe_compat:
+        size = int(ceil(float(X - S + 2 * padding) // stride)) + 1
+        if padding > 0 and (size - 1)*stride >= X + padding:
+            # decrement size if last pooling op is completely in padding
+            size -= 1
+    else:
+        # normal neon output size determination
+        size = (X - S + 2 * padding) // stride + 1
+
+    return size
 
 
 class Shuffler(object):
@@ -42,31 +69,65 @@ class Shuffler(object):
             self.AB, self.A)
 
 
-# def fprop(ctx, queue, I, I_layout, W, W_layout, O, O_layout):
-def fprop(ctx, queue, I, I_shape, W, W_shape, O, O_shape):
-    """
-    layout should be:
-    - for I:  'C H W N'
-    - for W:  'Ci H W Co'
-    - for O:  'C H W N'
-    """
-    Ci = W_shape[0]
-    Co = W_shape[3]
-    kH = W_shape[1]
-    kW = W_shape[2]
-    iH = I_shape[1]
-    iW = I_shape[2]
-    padH = kH // 2
-    padW = kW // 2
-    assert padH == padW
-    conv = Convolution((kH, kW, Co), strides=1, padding=1, be=be) #, init=init)
-    conv.configure((Ci, iH, iW))
-    conv.W = W
-    conv.outputs = O
+class Convolver(object):
+    def __init__(self, ctx, N, Ci, Co, kH, kW, iH, iW, padH, padW):
+        """
+        layout should be:
+        - for I:  'C H W N'
+        - for W:  'Ci H W Co'
+        - for O:  'C H W N'
+        """
+        oH = output_dim(False, iH, kH, padH, 1)
+        oW = output_dim(False, iW, kW, padW, 1)
 
-def bprop_gradW(ctx, queue, gradO, gradO_shape, W, W_shape, gradW, gradW_shape):
-    pass
+        # Ci = W_shape[0]
+        # Co = W_shape[3]
+        # kH = W_shape[1]
+        # kW = W_shape[2]
+        # iH = I_shape[1]
+        # iW = I_shape[2]
+        # padH = kH // 2
+        # padW = kW // 2
+        assert padH == padW
+        # self.conv = Convolution((kH, kW, Co), strides=1, padding=padH, be=be) #, init=init)
+        # self.conv.configure((Ci, iH, iW))
+        self.fpropcuda = FpropCuda(ctx, 'f4',
+            N, Ci, Co,
+            1, iH, iW,
+            1, kH, kW,
+            1, oH, oW,
+            0, padH, padW,
+            0, 1, 1)
 
-def bprop_gradI(ctx, queue, gradO, gradO_shape, W, W_shape, gradI, gradI_shape):
-    pass
+    def getIShape(self):
+        pass
+
+    def getGradIShape(self):
+        return self.getIShape()
+
+    def getWShape(self):
+        pass
+
+    def getGradWShape(self):
+        return self.getWShape()
+
+    def getOShape(self):
+        pass
+
+    def getGradOShape(self):
+        return self.getOShape()
+
+    # def fprop(ctx, queue, I, I_layout, W, W_layout, O, O_layout):
+    def fprop(self, ctx, queue, I, W, O):
+        self.fpropcuda.bind_params(I, W, O, 1.0, 0.0)
+        self.fpropcuda.execute(queue)
+        # conv.W = W
+        # conv.outputs = O
+        # conv.fprop(I)
+
+    def bprop_gradW(self, ctx, queue, gradO, W, gradW):
+        pass
+
+    def bprop_gradI(self, ctx, queue, gradO, W, gradI):
+        pass
 

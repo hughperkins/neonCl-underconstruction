@@ -30,16 +30,19 @@ if sys.version_info >= (3, 0):
 
 
 class KernelGroup(object):
-    def __init__(self, lib, dtype):
-        self.lib = lib
+    def __init__(self, dtype):
+        self.vec_size = 4
+        self.clss = 'sconv'
         self.dtype = dtype
-        self.dtype_str = dtype.str[1:]
-        self.vec_size = 4 if dtype.itemsize == 4 else 8
+        # self.lib = lib
+        # self.dtype = dtype
+        # self.dtype_str = dtype.str[1:]
+        # self.vec_size = 4 if dtype.itemsize == 4 else 8
 
-        if dtype.type is np.float32:
-            self.clss = "sconv"
-        else:
-            raise TypeError("dtype not supported.")
+        #if dtype.type is np.float32:
+        #    self.clss = "sconv"
+        #else:
+        #    raise TypeError("dtype not supported.")
 
     def __str__(self):
         raise TypeError("please implement __str__ to describe kernel params for logging.")
@@ -50,21 +53,25 @@ class KernelGroup(object):
     def execute(self, repeat=1, unbind=True):
         raise TypeError("execute not implemented.")
 
-    def init_bsum(self, bsum, flags):
-        flags |= self.flags
-        if bsum:
-            bsum_gpudata = bsum.gpudata
-            self.bsum_zero = [bsum_gpudata, 0, bsum.size, self.lib.stream]
-            flags |= 4
-        else:
-            bsum_gpudata = 0
-            self.bsum_zero = 0
-            flags &= ~4
-        return bsum_gpudata, flags
 
+#    N: Number of images in mini-batch
+#    C: Number of input feature maps
+#    K: Number of output feature maps
+
+#    D: Depth  of input image
+#    H: Height of input image
+#    W: Width  of input image
+
+#    T: Depth  of filter kernel
+#    R: Height of filter kernel
+#    S: Width  of filter kernel
+
+#    M: depth of output
+#    P: height of output
+#    Q: width of output
 
 class FpropCuda(KernelGroup):
-    def __init__(self, lib, dtype,
+    def __init__(self, ctx, dtype,
                  N, C, K,
                  D, H, W,
                  T, R, S,
@@ -73,7 +80,7 @@ class FpropCuda(KernelGroup):
                  str_d, str_h, str_w
                  ):
 
-        super(FpropCuda, self).__init__(lib, dtype)
+        super(FpropCuda, self).__init__(dtype)
 
         assert N % 32 == 0, "N dim must be multiple of 32"
         assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
@@ -87,7 +94,7 @@ class FpropCuda(KernelGroup):
         PQ = P * Q
         PQN = PQ * N
         self.kernel = convolution_cl._get_conv_kernel(
-            ctx=self.lib.cl_ctx, options='', dtype=self.dtype.str[1:], filter_size=R*S,
+            ctx=ctx, options='', dtype=self.dtype, filter_size=R*S,
             operation='fprop')
         grid = (PQ * (-(-N // 32)), (-(-K // 32)), 1)
         block = (8, 8, 1)
@@ -101,13 +108,12 @@ class FpropCuda(KernelGroup):
         self.shared = RST * 4 * 2
 
     def bind_params(self, I, F, O, alpha, beta, flags=0):
-        assert I.dtype == F.dtype == O.dtype
         self.launch_args[2:7] = (alpha, beta,
-                                 I.gpudata, F.gpudata, O.gpudata)
+                                 I, F, O)
 
-    def execute(self, repeat=1, unbind=True):
+    def execute(self, q, repeat=1, unbind=True):
         for r in range(repeat):
-            call_cl_kernel(self.kernel, self.lib.q, *self.launch_args)
+            call_cl_kernel(self.kernel, q, *self.launch_args)
         if unbind:
             self.launch_args[2:7] = (None,) * 5
 
@@ -116,7 +122,7 @@ class FpropCuda(KernelGroup):
 
 
 class BpropCuda(KernelGroup):
-    def __init__(self, lib, dtype,
+    def __init__(self, ctx, dtype,
                  N, C, K,
                  D, H, W,
                  T, R, S,
@@ -125,7 +131,7 @@ class BpropCuda(KernelGroup):
                  str_d, str_h, str_w
                  ):
 
-        super(BpropCuda, self).__init__(lib, dtype)
+        super(BpropCuda, self).__init__(dtype)
 
         assert N % 32 == 0, "N dim must be multiple of 32"
         assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
@@ -142,7 +148,7 @@ class BpropCuda(KernelGroup):
         PQN = PQ * N
 
         self.kernel = convolution_cl._get_conv_kernel(
-            ctx=self.lib.cl_ctx, options='', dtype=self.dtype.str[1:], filter_size=R*S,
+            ctx=ctx, options='', dtype=self.dtype, filter_size=R*S,
             operation='bprop')
         grid = (HW * (-(-N // 32)), -(-C // 32), 1)
         block = (8, 8, 1)
@@ -156,34 +162,32 @@ class BpropCuda(KernelGroup):
         self.shared = R*S*T * 4 * 2
 
         # generate the kernel args for dim shuffling CTRSK => KTRSC
-        shuffle_grid = (ceil_div(K, 32), ceil_div(C, 32), R*S*T)
-        self.shuffle_size = C*T*R*S*K*dtype.itemsize
-        self.shuffle_args = [shuffle_grid, (32, 8, 1), None, None]
-        self.shuffle_args.extend(_flatten([
-            R*S*T*K, R*S*K, S*K, K,
-            R*S*T*C, R*S*C, S*C, C,
-            R*S, T, R, S, div_RS_mul_shift, div_S_mul_shift]))
+        # shuffle_grid = (ceil_div(K, 32), ceil_div(C, 32), R*S*T)
+        # self.shuffle_size = C*T*R*S*K*dtype.itemsize
+        # self.shuffle_args = [shuffle_grid, (32, 8, 1), None, None]
+        # self.shuffle_args.extend(_flatten([
+        #     R*S*T*K, R*S*K, S*K, K,
+        #     R*S*T*C, R*S*C, S*C, C,
+        #     R*S, T, R, S, div_RS_mul_shift, div_S_mul_shift]))
 
-        lib.set_scratch_size(self.shuffle_size)
-        self.shuffleKernel = get_shuffle_kernel_cl(self.lib.cl_ctx, self.dtype.str[1:])
+        # lib.set_scratch_size(self.shuffle_size)
+        # self.shuffleKernel = get_shuffle_kernel_cl(self.lib.cl_ctx, self.dtype.str[1:])
 
-    def bind_params(self, gradO, W, gradI, alpha, beta, flags=0):
-        assert gradO.dtype == W.dtype == gradI.dtype
+    def bind_params(self, gradO, Wt, gradI, alpha, beta, flags=0):
+        # Wt = self.lib.scratch_buffer(self.shuffle_size)
 
-        Wt = self.lib.scratch_buffer(self.shuffle_size)
-
-        self.shuffle_args[2:4] = (Wt, W.gpudata)
+        #self.shuffle_args[2:4] = (Wt, W.gpudata)
         self.launch_args[2:7] = (alpha, beta,
                                  gradO.gpudata, Wt, gradI.gpudata)
 
-    def execute(self, repeat=1, unbind=True):
+    def execute(self, q, repeat=1, unbind=True):
         C = self.shuffle_args[12]
         assert C >= 4, "C dim must be 4 or greater for CUDA C backprop kernel"
         for r in range(repeat):
-            call_cl_kernel(self.shuffleKernel, self.lib.q, *self.shuffle_args)
-            call_cl_kernel(self.kernel, self.lib.q, *self.launch_args)
+            # call_cl_kernel(self.shuffleKernel, self.lib.q, *self.shuffle_args)
+            call_cl_kernel(self.kernel, q, *self.launch_args)
         if unbind:
-            self.shuffle_args[2:4] = (None,) * 2
+            # self.shuffle_args[2:4] = (None,) * 2
             self.launch_args[2:7] = (None,) * 5
 
     def __str__(self):
@@ -191,7 +195,7 @@ class BpropCuda(KernelGroup):
 
 
 class UpdateCuda(KernelGroup):
-    def __init__(self, lib, dtype,
+    def __init__(self, ctx, dtype,
                  N, C, K,
                  D, H, W,
                  T, R, S,
@@ -199,7 +203,7 @@ class UpdateCuda(KernelGroup):
                  pad_d, pad_h, pad_w,
                  str_d, str_h, str_w):
 
-        super(UpdateCuda, self).__init__(lib, dtype)
+        super(UpdateCuda, self).__init__(dtype)
 
         assert N % 32 == 0, "N dim must be multiple of 32"
 
@@ -226,7 +230,7 @@ class UpdateCuda(KernelGroup):
         div_Q_mul_shift = get_div_mul_shift_64(grid_Q)
 
         self.kernel = convolution_cl._get_conv_kernel(
-            ctx=self.lib.cl_ctx, options='', dtype=self.dtype.str[1:], filter_size=R*S,
+            ctx=self.ctx, options='', dtype=self.dtype.str[1:], filter_size=R*S,
             operation='update')
         grid = (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1)
         block = (8, 32, 1)
@@ -273,16 +277,16 @@ class UpdateCuda(KernelGroup):
             update_temp = gradW.gpudata
             self.convert_args = False
 
-        self.zero_args = [update_temp, 0, gradW.size, self.lib.stream]
+        self.zero_args = [update_temp, 0, gradW.size]
 
         beta = 0.0
         self.launch_args[2:7] = (alpha, beta,
                                  I.gpudata, gradO.gpudata, gradW.gpudata)
 
-    def execute(self, repeat=1, unbind=True):
+    def execute(self, q, repeat=1, unbind=True):
         for r in range(repeat):
-            cl.enqueue_fill_buffer(self.lib.q, self.zero_args[0], np.float32(0), 0, self.zero_args[2] * 4)
-            call_cl_kernel(self.kernel, self.lib.q, *self.launch_args)
+            cl.enqueue_fill_buffer(q, self.zero_args[0], np.float32(0), 0, self.zero_args[2] * 4)
+            call_cl_kernel(self.kernel, q, *self.launch_args)
             if self.convert_args:
                 _fp_convert(*self.convert_args)
 
