@@ -17,7 +17,7 @@ import numpy as np
 import pyopencl as cl
 from operator import mul
 import functools
-from winogradcl.backends.convolution import FpropCuda, BpropCuda
+from winogradcl.backends.convolution import FpropCuda, BpropCuda, UpdateCuda
 
 
 mf = cl.mem_flags
@@ -77,6 +77,10 @@ class Convolver(object):
         - for W:  'Ci H W Co'
         - for O:  'C H W N'
         """
+        self.Ci = Ci
+        self.Co = Co
+        self.kH= kH
+        self.kW = kW
         oH = output_dim(False, iH, kH, padH, 1)
         oW = output_dim(False, iW, kW, padW, 1)
 
@@ -99,6 +103,31 @@ class Convolver(object):
             0, padH, padW,
             0, 1, 1)
 
+        self.bpropcuda = BpropCuda(ctx, 'f4',
+            N, Ci, Co,
+            1, iH, iW,
+            1, kH, kW,
+            1, oH, oW,
+            0, padH, padW,
+            0, 1, 1)
+
+        self.updatecuda = UpdateCuda(ctx, 'f4',
+            N, Ci, Co,
+            1, iH, iW,
+            1, kH, kW,
+            1, oH, oW,
+            0, padH, padW,
+            0, 1, 1)
+
+    def getFpropScratchSize(self):
+        return 0
+
+    def getBpropGradWScratchSize(self):
+        return 0
+
+    def getBpropGradIScratchSize(self):
+        return self.Ci * self.Co * self.kH * self.kW
+
     def getIShape(self):
         pass
 
@@ -118,16 +147,16 @@ class Convolver(object):
         return self.getOShape()
 
     # def fprop(ctx, queue, I, I_layout, W, W_layout, O, O_layout):
-    def fprop(self, ctx, queue, I, W, O):
+    def fprop(self, ctx, queue, I, W, O, scratch=None):
         self.fpropcuda.bind_params(I, W, O, 1.0, 0.0)
         self.fpropcuda.execute(queue)
-        # conv.W = W
-        # conv.outputs = O
-        # conv.fprop(I)
 
-    def bprop_gradW(self, ctx, queue, gradO, W, gradW):
-        pass
 
-    def bprop_gradI(self, ctx, queue, gradO, W, gradI):
-        pass
+    def bprop_gradW(self, ctx, queue, I, gradO, gradW, scratch=None):
+        self.updatecuda.bind_params(I, gradO, gradW, 1.0)
+        self.updatecuda.execute(queue)
+
+    def bprop_gradI(self, ctx, queue, gradO, Wt, gradI, scratch):
+        self.bpropcuda.bind_params(gradO, Wt, gradI, 1.0, 0.0)
+        self.bpropcuda.execute(queue)
 

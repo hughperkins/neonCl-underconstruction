@@ -216,21 +216,23 @@ class UpdateCuda(KernelGroup):
         PQN = PQ * N
         div_S_mul_shift = get_div_mul_shift_32(R*S+32, S)
 
-        if lib.deterministic:
-            grid_P = 1
-            grid_Q = 1
-            self.determ = CRSTK
-        else:
-            grid_P = P
-            grid_Q = Q
-            self.determ = 0
+        self.W_size = C * K * R * S
+
+        #if lib.deterministic:
+        #    grid_P = 1
+        #    grid_Q = 1
+        #    self.determ = CRSTK
+        #else:
+        grid_P = P
+        grid_Q = Q
+        # self.determ = 0
 
         pq_blocks = grid_P * grid_Q
         div_PQ_mul_shift = get_div_mul_shift_64(pq_blocks)
         div_Q_mul_shift = get_div_mul_shift_64(grid_Q)
 
         self.kernel = convolution_cl._get_conv_kernel(
-            ctx=self.ctx, options='', dtype=self.dtype.str[1:], filter_size=R*S,
+            ctx=ctx, options='', dtype=dtype, filter_size=R*S,
             operation='update')
         grid = (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1)
         block = (8, 32, 1)
@@ -241,7 +243,7 @@ class UpdateCuda(KernelGroup):
                                        div_PQ_mul_shift, div_Q_mul_shift, div_S_mul_shift])
         self.launch_args = [grid, block] + [None] * 5 + static_kernel_args
 
-        lib.set_scratch_size((self.determ or C*T*R*S*K)*4)
+        # lib.set_scratch_size((determ or C*T*R*S*K)*4)
 
     def update_grid(self, kernel_name, base_blocks, P, Q, SM_count):
         threads = kernel_specs.kernels[kernel_name]["threads"]
@@ -269,26 +271,16 @@ class UpdateCuda(KernelGroup):
         return (grid[0][0], grid[0][1], threads)
 
     def bind_params(self, I, gradO, gradW, alpha):
-        assert I.dtype == gradO.dtype
-        if gradW.dtype is not np.float32:
-            update_temp = self.lib.scratch_buffer((self.determ or gradW.size)*4)
-            self.convert_args = [update_temp, "f4", gradW, False]
-        else:
-            update_temp = gradW.gpudata
-            self.convert_args = False
-
-        self.zero_args = [update_temp, 0, gradW.size]
+        self.zero_args = [gradW, 0, self.W_size]
 
         beta = 0.0
         self.launch_args[2:7] = (alpha, beta,
-                                 I.gpudata, gradO.gpudata, gradW.gpudata)
+                                 I, gradO, gradW)
 
     def execute(self, q, repeat=1, unbind=True):
         for r in range(repeat):
             cl.enqueue_fill_buffer(q, self.zero_args[0], np.float32(0), 0, self.zero_args[2] * 4)
             call_cl_kernel(self.kernel, q, *self.launch_args)
-            if self.convert_args:
-                _fp_convert(*self.convert_args)
 
         if unbind:
             self.zero_args = self.convert_args = None

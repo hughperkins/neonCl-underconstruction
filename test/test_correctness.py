@@ -70,7 +70,7 @@ def check_gradWeights(O, I, W, gradO, gradW, ci, h, w, co, eps=1e-2):
                     sum += v
     cpu_value = sum
     gpu_value = gradW[ci, kh, kw, co]
-    print('gpu', gpu_value, 'cpu', cpu_value)
+    print('checkGradW gpu', gpu_value, 'cpu', cpu_value)
     assert abs(cpu_value - gpu_value) < eps
 
 def check_gradI(O, I, W, gradO, gradI, c, h, w, n, eps=1e-4):
@@ -103,7 +103,7 @@ def check_gradI(O, I, W, gradO, gradI, c, h, w, n, eps=1e-4):
                     sum += v
     cpu_value = sum
     gpu_value = gradI[c, ih, iw, n]
-    print('gpu', gpu_value, 'cpu', cpu_value)
+    print('checkGradI gpu', gpu_value, 'cpu', cpu_value)
     assert abs(cpu_value - gpu_value) < eps
 
 def check(O, W, I, c, h, w, n, eps=1e-4):
@@ -130,8 +130,9 @@ def check(O, W, I, c, h, w, n, eps=1e-4):
                 if ih >= 0 and iw >= 0 and ih < iH and iw < iW:
                     v = I[ci, ih, iw, n] * W[ci, kh, kw, co]
                     sum += v
+    cpu_value = sum
     gpu_value = O[c*iH*iW + h*iW + w,n]
-    print('c', c, 'h', h, 'w', w, 'n', n, 'cpu %.6f gpu %.6f' % (sum, gpu_value))
+    print('checkO c', c, 'h', h, 'w', w, 'n', n, 'cpu %.6f gpu %.6f' % (sum, gpu_value))
     assert abs(sum - gpu_value) < eps
     return ""
 
@@ -197,8 +198,12 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
         kH, kW, iH, iW,
         kH // 2, kW // 2)
     convolver.fprop(ctx, q, I_cl, W_cl, O_cl)
+    convolver.bprop_gradW(ctx, q,I_cl, gradO_cl, gradW_cl)
+    # convolver.bprop_gradW(ctx, q,I_cl, gradO_cl, gradW_cl)
 
     cl.enqueue_copy(q, O, O_cl)
+    cl.enqueue_copy(q, gradW, gradW_cl)
+    cl.enqueue_copy(q, gradI, gradI_cl)
 
     #conv.deltas = gradI_cl
     #conv.dW = gradW_cl
@@ -236,6 +241,12 @@ def simple1():
     check(W=W, I=I, O=O, c=1, h=0, w=0, n=0)
     check(W=W, I=I, O=O, c=3, h=2, w=1, n=27)
 
+    check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=0, w=0, co=0)
+    check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=0, w=0, co=1)
+    check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=0, w=1, co=0)
+    check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=1, w=0, co=0)
+    check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=0, w=0, co=0)
+
     check_gradI(O=O, I=I, W=W, gradO=gradO, gradI=gradI, c=0, h=0, w=0, n=0)
     check_gradI(O=O, I=I, W=W, gradO=gradO, gradI=gradI, c=0, h=0, w=0, n=1)
     check_gradI(O=O, I=I, W=W, gradO=gradO, gradI=gradI, c=0, h=0, w=1, n=0)
@@ -243,12 +254,6 @@ def simple1():
     check_gradI(O=O, I=I, W=W, gradO=gradO, gradI=gradI, c=0, h=0, w=0, n=0)
 
 #        print('gradW', gradW)
-    check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=0, w=0, co=0)
-    check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=0, w=0, co=1)
-    check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=0, w=1, co=0)
-    check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=1, w=0, co=0)
-    check_gradWeights(O=O, I=I, W=W, gradO=gradO, gradW=gradW, ci=0, h=0, w=0, co=0)
-
 def one():
     image_size = 64
     N = 128
