@@ -119,6 +119,11 @@ class Convolver(object):
             0, padH, padW,
             0, 1, 1)
 
+    def getScratchSize(self, fpropOnly=False):
+        if fpropOnly:
+            return 0
+        return self.getBpropGradIScratchSize()
+
     def getFpropScratchSize(self):
         return 0
 
@@ -151,12 +156,13 @@ class Convolver(object):
         self.fpropcuda.bind_params(I, W, O, 1.0, 0.0)
         self.fpropcuda.execute(queue)
 
-
     def bprop_gradW(self, ctx, queue, I, gradO, gradW, scratch=None):
         self.updatecuda.bind_params(I, gradO, gradW, 1.0)
         self.updatecuda.execute(queue)
 
-    def bprop_gradI(self, ctx, queue, gradO, Wt, gradI, scratch):
+    def bprop_gradI(self, ctx, queue, gradO, W, gradI, scratch):
+        Wt = scratch
+        self.bpropcuda.shuffle(queue, Wt, W)
         self.bpropcuda.bind_params(gradO, Wt, gradI, 1.0, 0.0)
         self.bpropcuda.execute(queue)
 

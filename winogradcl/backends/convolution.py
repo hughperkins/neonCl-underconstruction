@@ -162,23 +162,28 @@ class BpropCuda(KernelGroup):
         self.shared = R*S*T * 4 * 2
 
         # generate the kernel args for dim shuffling CTRSK => KTRSC
-        # shuffle_grid = (ceil_div(K, 32), ceil_div(C, 32), R*S*T)
-        # self.shuffle_size = C*T*R*S*K*dtype.itemsize
-        # self.shuffle_args = [shuffle_grid, (32, 8, 1), None, None]
-        # self.shuffle_args.extend(_flatten([
-        #     R*S*T*K, R*S*K, S*K, K,
-        #     R*S*T*C, R*S*C, S*C, C,
-        #     R*S, T, R, S, div_RS_mul_shift, div_S_mul_shift]))
+        dtype_itemsize = 4
+        shuffle_grid = (ceil_div(K, 32), ceil_div(C, 32), R*S*T)
+        self.shuffle_size = C*T*R*S*K*dtype_itemsize
+        self.shuffle_args = [shuffle_grid, (32, 8, 1), None, None]
+        self.shuffle_args.extend(_flatten([
+            R*S*T*K, R*S*K, S*K, K,
+            R*S*T*C, R*S*C, S*C, C,
+            R*S, T, R, S, div_RS_mul_shift, div_S_mul_shift]))
 
         # lib.set_scratch_size(self.shuffle_size)
-        # self.shuffleKernel = get_shuffle_kernel_cl(self.lib.cl_ctx, self.dtype.str[1:])
+        self.shuffleKernel = get_shuffle_kernel_cl(ctx, dtype)
+
+    def shuffle(self, q, Wt, W):
+        self.shuffle_args[2:4] = (Wt, W)
+        call_cl_kernel(self.shuffleKernel, q, *self.shuffle_args)
 
     def bind_params(self, gradO, Wt, gradI, alpha, beta, flags=0):
         # Wt = self.lib.scratch_buffer(self.shuffle_size)
 
         #self.shuffle_args[2:4] = (Wt, W.gpudata)
         self.launch_args[2:7] = (alpha, beta,
-                                 gradO.gpudata, Wt, gradI.gpudata)
+                                 gradO, Wt, gradI)
 
     def execute(self, q, repeat=1, unbind=True):
         C = self.shuffle_args[12]

@@ -197,8 +197,13 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     convolver = api.Convolver(ctx, N, Ci, Co,
         kH, kW, iH, iW,
         kH // 2, kW // 2)
+    scratch_size = convolver.getScratchSize(fpropOnly=False)
+    scratch = np.zeros(scratch_size, dtype=np.float32)
+    scratch_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=scratch)
+
     convolver.fprop(ctx, q, I_cl, W_cl, O_cl)
-    convolver.bprop_gradW(ctx, q,I_cl, gradO_cl, gradW_cl)
+    convolver.bprop_gradW(ctx, q, I_cl, gradO_cl, gradW_cl)
+    convolver.bprop_gradI(ctx, q, gradO_cl, W_cl, gradI_cl, scratch_cl)
     # convolver.bprop_gradW(ctx, q,I_cl, gradO_cl, gradW_cl)
 
     cl.enqueue_copy(q, O, O_cl)
