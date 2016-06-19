@@ -112,6 +112,24 @@ class Convolver(object):
             0, padH, padW,
             0, 1, 1)
 
+    def getILayout(self):
+        return 'Ci iH iW N'
+
+    def getGradILayout(self):
+        return 'Ci iH iW N'
+
+    def getWLayout(self):
+        return 'Ci kH kW Co'
+
+    def getGradWLayout(self):
+        return 'Ci kH kW Co'
+
+    def getOLayout(self):
+        return 'Co oH oW N'
+
+    def getGradOLayout(self):
+        return 'Co oH oW N'
+
     def getScratchSize(self, fpropOnly=False):
         if fpropOnly:
             return 0
