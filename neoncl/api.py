@@ -69,7 +69,7 @@ class Shuffler(object):
 
 
 class Convolver(object):
-    def __init__(self, ctx, N, Ci, Co, kH, kW, iH, iW, padH, padW):
+    def __init__(self, ctx, N, Ci, Co, kH, kW, iH, iW, padH, padW, dH, dW):
         """
         layout should be:
         - for I:  'C H W N'
@@ -84,8 +84,10 @@ class Convolver(object):
         self.N = N
         self.kH= kH
         self.kW = kW
-        oH = output_dim(False, iH, kH, padH, 1)
-        oW = output_dim(False, iW, kW, padW, 1)
+        self.dH = dH
+        self.dW = dW
+        oH = output_dim(False, iH, kH, padH, dH)
+        oW = output_dim(False, iW, kW, padW, dW)
 
         assert padH == padW
         self.fpropcuda = FpropCuda(ctx, 'f4',
@@ -94,7 +96,7 @@ class Convolver(object):
             1, kH, kW,
             1, oH, oW,
             0, padH, padW,
-            0, 1, 1)
+            0, dH, dW)
 
         self.bpropcuda = BpropCuda(ctx, 'f4',
             N, Ci, Co,
@@ -102,7 +104,7 @@ class Convolver(object):
             1, kH, kW,
             1, oH, oW,
             0, padH, padW,
-            0, 1, 1)
+            0, dH, dW)
 
         self.updatecuda = UpdateCuda(ctx, 'f4',
             N, Ci, Co,
@@ -110,7 +112,7 @@ class Convolver(object):
             1, kH, kW,
             1, oH, oW,
             0, padH, padW,
-            0, 1, 1)
+            0, dH, dW)
 
     def getILayout(self):
         return 'Ci iH iW N'
