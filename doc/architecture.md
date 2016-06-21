@@ -46,3 +46,4 @@ winogradcl.backends.layer_gpu.py:
          self.updat_kernels = winogradcl.backends.convolution.UpdateCuda(N, C, K, D, H, W, T, R, S, M, P, Q,
                        pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
+
