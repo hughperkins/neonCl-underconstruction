@@ -31,3 +31,20 @@ to opencl).  They were all run on Titan X.
 7: FpropWinograd_4x4_3x3 BpropWinograd_4x4_3x3 UpdateWinograd_3x3_4x4
 ```
 
+## transform kernels
+
+### fprop
+
+```
+_get_xprop_image_trans_4x4_kernel(f4)
+_get_fprop_filter_trans_4x4_kernel(f4)
+```
+
+### bprop
+
+```
+_get_bprop_filter_trans_4x4_kernel(f4)
+_get_update_image_trans_4x4_kernel(f4)
+_get_update_delta_trans_4x4_kernel(f4)
+```
+
