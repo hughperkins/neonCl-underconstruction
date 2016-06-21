@@ -36,8 +36,8 @@ to opencl).  They were all run on Titan X.
 ### fprop
 
 ```
-_get_xprop_image_trans_4x4_kernel(f4)
-_get_fprop_filter_trans_4x4_kernel(f4)
+image_kernel = _get_xprop_image_trans_4x4_kernel(f4)
+filter_kernel = _get_fprop_filter_trans_4x4_kernel(f4)
 ```
 
 ### bprop
