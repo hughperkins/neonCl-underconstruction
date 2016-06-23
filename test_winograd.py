@@ -142,27 +142,30 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     oW = iW
 
     W = np.random.randn(Ci,kH,kW,Co).astype(np.float32)
-    W.fill(0)
+    #W.fill(0)
     W[0, 0, 0, 0] = 3
+    W[1, 0, 0, 0] = 4
+    W[1, 0, 1, 0] = 7
+    W[1, 1, 1, 0] = 0.3
+    W[0, 1, 1, 0] = 5
     print('W', W)
+
+    Wfull = W
 
     I = np.zeros((Ci,iH, iW,N), dtype=np.float32)
     I[:] = np.random.randn(*I.shape)
-    I.fill(0)
+    #I.fill(0)
     I[0, 0, 0, 0] = 5
-    Inopadded = I
-    Ipadded = np.zeros((iH + 2, oH + 2), dtype=np.float32)
-    Ipadded[1:5,1:5] = Inopadded[0,:,:,0]
-    I = Ipadded
+    I[0, 0, 1, 0] = 2
+    #Inopadded = I
+    Ifull = I
 
-    print('Inopadded', Inopadded)
-    print('Ipadded', Ipadded)
+#    print('Inopadded', Inopadded)
+#    print('Ipadded', Ipadded)
 
     print('Co', Co, 'iH', iH, 'iW', iW, 'N', N)
     O = np.zeros((Co, oH, oW, N), dtype=np.float32)
 
-    U = np.zeros((6, 6), dtype=np.float32)  # transformed filter
-    V = np.zeros((6, 6), dtype=np.float32) # transformed image
 
     BT = np.array([[4,0,-5,0,1,0],
           [0,-4,-4,1,1,0],
@@ -185,71 +188,99 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
         
     # I = I.reshape(iH, iW)
 
-    # transform image
-    Vtmp = np.zeros((6,6), dtype=np.float32)
-    for i in range(6):
-        Vtmp[0][i] = + 4 * I[0][i] - 5 * I[2][i]               + I[4][i]
-        Vtmp[1][i] = - 4 * I[1][i] - 4 * I[2][i] +     I[3][i] + I[4][i]
-        Vtmp[2][i] = + 4 * I[1][i] - 4 * I[2][i] -     I[3][i] + I[4][i]
-        Vtmp[3][i] = - 2 * I[1][i] -     I[2][i] + 2 * I[3][i] + I[4][i]
-        Vtmp[4][i] = + 2 * I[1][i] -     I[2][i] - 2 * I[3][i] + I[4][i]
-        Vtmp[5][i] = + 4 * I[1][i]               - 5 * I[3][i]           + I[5][i]
-    print('Vtmp', Vtmp)
-    print('BT.dot(I)', BT.dot(I))
+    U2 = np.zeros((6, 6, Ci), dtype=np.float32)
+    V2 = np.zeros((Ci, 6, 6), dtype=np.float32)
 
-# B
-#  4  0  0  0  0  0
-#  0 -4  4 -2  2  4
-# -5 -4 -4 -1 -1  0
-#  0  1 -1  2 -2 -5
-#  1  1  1  1  1  0
-#  0  0  0  0  0  1
+    for ci in range(Ci):
+        print('IMAGE ci', ci)
+        # transform image
+        Ipadded = np.zeros((iH + 2, oH + 2), dtype=np.float32)
+        Ipadded[1:5,1:5] = Ifull[ci,:,:,0]
+        I = Ipadded
+        Vtmp = np.zeros((6,6), dtype=np.float32)
+        for i in range(6):
+            Vtmp[0][i] = + 4 * I[0][i] - 5 * I[2][i]               + I[4][i]
+            Vtmp[1][i] = - 4 * I[1][i] - 4 * I[2][i] +     I[3][i] + I[4][i]
+            Vtmp[2][i] = + 4 * I[1][i] - 4 * I[2][i] -     I[3][i] + I[4][i]
+            Vtmp[3][i] = - 2 * I[1][i] -     I[2][i] + 2 * I[3][i] + I[4][i]
+            Vtmp[4][i] = + 2 * I[1][i] -     I[2][i] - 2 * I[3][i] + I[4][i]
+            Vtmp[5][i] = + 4 * I[1][i]               - 5 * I[3][i]           + I[5][i]
+        print('Vtmp', Vtmp)
+        print('BT.dot(I)', BT.dot(I))
 
-    # each i is a row of V
-    for i in range(6):
-        V[i][0] = + 4 * Vtmp[i][0] - 5 * Vtmp[i][2]           + Vtmp[i][4]
-        V[i][1] = - 4 * Vtmp[i][1] - 4 * Vtmp[i][2] +     Vtmp[i][3] + Vtmp[i][4]
-        V[i][2] = + 4 * Vtmp[i][1] - 4 * Vtmp[i][2] -     Vtmp[i][3] + Vtmp[i][4]
-        V[i][3] = - 2 * Vtmp[i][1] -     Vtmp[i][2] + 2 * Vtmp[i][3] + Vtmp[i][4]
-        V[i][4] = + 2 * Vtmp[i][1] -     Vtmp[i][2] - 2 * Vtmp[i][3] + Vtmp[i][4]
-        V[i][5] = + 4 * Vtmp[i][1]               - 5 * Vtmp[i][3]           + Vtmp[i][5]
-    print('V', V)
-    print('(BT.dot(I)).dot(BT.t())', (BT.dot(I)).dot(BT.T))
+    # B
+    #  4  0  0  0  0  0
+    #  0 -4  4 -2  2  4
+    # -5 -4 -4 -1 -1  0
+    #  0  1 -1  2 -2 -5
+    #  1  1  1  1  1  0
+    #  0  0  0  0  0  1
 
-    # I = I.reshape(Ci, iH, iW, N)
+        V = np.zeros((6, 6), dtype=np.float32) # transformed image
+        # each i is a row of V
+        for i in range(6):
+            V[i][0] = + 4 * Vtmp[i][0] - 5 * Vtmp[i][2]           + Vtmp[i][4]
+            V[i][1] = - 4 * Vtmp[i][1] - 4 * Vtmp[i][2] +     Vtmp[i][3] + Vtmp[i][4]
+            V[i][2] = + 4 * Vtmp[i][1] - 4 * Vtmp[i][2] -     Vtmp[i][3] + Vtmp[i][4]
+            V[i][3] = - 2 * Vtmp[i][1] -     Vtmp[i][2] + 2 * Vtmp[i][3] + Vtmp[i][4]
+            V[i][4] = + 2 * Vtmp[i][1] -     Vtmp[i][2] - 2 * Vtmp[i][3] + Vtmp[i][4]
+            V[i][5] = + 4 * Vtmp[i][1]               - 5 * Vtmp[i][3]           + Vtmp[i][5]
+        print('V', V)
+        print('(BT.dot(I)).dot(BT.t())', (BT.dot(I)).dot(BT.T))
+        
+        for i in range(6):
+            for j in range(6):
+                V2[ci, i, j] = V[i, j]
 
-    # filters
+        # I = I.reshape(Ci, iH, iW, N)
 
-    W = W.reshape(kH, kW)
+        # filters
 
-    Utmp = np.zeros((6, 3), dtype=np.float32)
-    for i in range(3):
-        Utmp[0][i] = 1/4 * W[0][i]
-        Utmp[1][i] = - 1/6 * (W[0][i] + W[1][i] + W[2][i])
-        Utmp[2][i] = - 1/6 * (W[0][i] + W[1][i] + W[2][i])
-        Utmp[3][i] = 1/24 * W[0][i] + 1/12 * W[1][i] + 1/6 * W[2][i]
-        Utmp[4][i] = 1/24 * W[0][i] - 1/12 * W[1][i] + 1/6 * W[2][i]
-        Utmp[5][i] = W[2][i]
-    print('Utmp', Utmp)
-    print('GT.dot(W)', G.dot(W))
+    for ci in range(Ci):
+        print('FILTER ci', ci)
+        Wall = W
+        W = W[ci,:,:,0].reshape(3,3)
+        print('W.shape', W.shape)
+        Utmp = np.zeros((6, 3), dtype=np.float32)
+        for i in range(3):
+            Utmp[0][i] = 1/4 * W[0][i]
+            Utmp[1][i] = - 1/6 * (W[0][i] + W[1][i] + W[2][i])
+            Utmp[2][i] = - 1/6 *W[0][i] + 1/6 * W[1][i] - 1/6 * W[2][i]
+            Utmp[3][i] = 1/24 * W[0][i] + 1/12 * W[1][i] + 1/6 * W[2][i]
+            Utmp[4][i] = 1/24 * W[0][i] - 1/12 * W[1][i] + 1/6 * W[2][i]
+            Utmp[5][i] = W[2][i]
+        print('Utmp', Utmp)
+        print('GT.dot(W)', G.dot(W))
 
-    for i in range(6):
-        U[i][0] = 1/4 * Utmp[i][0]
-        U[i][1] = - 1/6 * (Utmp[i][0] + Utmp[i][1] + Utmp[i][2])
-        U[i][2] = - 1/6 * (Utmp[i][0] + Utmp[i][1] + Utmp[i][2])
-        U[i][3] = 1/24 * Utmp[i][0] + 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
-        U[i][4] = 1/24 * Utmp[i][0] - 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
-        U[i][5] = Utmp[i][2]
-    print('U', U)
-    print('(G.dot(W)).dot(G.T)', (G.dot(W)).dot(G.T))
-    W = W.reshape(Ci, kH, kW, Co)
+        U = np.zeros((6, 6), dtype=np.float32)  # transformed filter
+        for i in range(6):
+            U[i][0] = 1/4 * Utmp[i][0]
+            U[i][1] = - 1/6 * Utmp[i][0] - 1/6 * Utmp[i][1] - 1/6 * Utmp[i][2]
+            U[i][2] = - 1/6 * Utmp[i][0] + 1/ 6 * Utmp[i][1] - 1 / 6 * Utmp[i][2]
+            U[i][3] = 1/24 * Utmp[i][0] + 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
+            U[i][4] = 1/24 * Utmp[i][0] - 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
+            U[i][5] = Utmp[i][2]
+        print('U', U)
+        print('(G.dot(W)).dot(G.T)', (G.dot(W)).dot(G.T))
+        #W = W.reshape(Ci, kH, kW, Co)
+        W = Wall
 
+        for i in range(6):
+            for j in range(6):
+                U2[i, j, ci] = U[i, j]
+
+    # M = np.zeros((N, Co, 1, 1)
     M = np.zeros((oH + 2, oW + 2), dtype=np.float32)
-    #M = U.dot(V)
-    #print('M', M)
     for mh in range(oH+2):
         for mw in range(oW+2):
-            M[mh, mw] = U[mh,mw] * V[mh,mw]
+        #M = U.dot(V)
+        #print('M', M)
+            sum = 0
+            for ci in range(Ci):
+                sum += U2[mh,mw,ci] * V2[ci,mh,mw]
+            # M[mh, mw] = U2[mh,mw].dot(V2[mh,mw])
+            M[mh, mw] = sum
+    print('M', M)
     
     # inverse transform
     O = O.reshape(4,4)
@@ -266,14 +297,16 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
         O[i][1] =         + Otmp[i][1] - Otmp[i][2] + 2 * Otmp[i][3] - 2 * Otmp[i][4]
         O[i][2] =         + Otmp[i][1] + Otmp[i][2] + 4 * Otmp[i][3] + 4 * Otmp[i][4]
         O[i][3] =         + Otmp[i][1] - Otmp[i][2] + 8 * Otmp[i][3] - 8 * Otmp[i][4] + Otmp[i][5]
-    I = Inopadded
+    I = Ifull
+    W = Wfull
     O = O.reshape(Co, 4, 4, N)
+    print('AT.dot(M).dot(AT.T)', AT.dot(M).dot(AT.T))
     return {'W': W, 'O': O, 'I': I}
 
 def simple1():
     image_size = 4
     N = 1
-    Ci = 1
+    Ci = 4
     Co = 1
     
     res = process(iH=image_size, iW=image_size, N=N, Ci=Ci,
