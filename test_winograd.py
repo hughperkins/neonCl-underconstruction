@@ -189,7 +189,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     # I = I.reshape(iH, iW)
 
     U2 = np.zeros((6, 6, Ci), dtype=np.float32)
-    V2 = np.zeros((Ci, 6, 6), dtype=np.float32)
+    V2 = np.zeros((6, 6, Ci), dtype=np.float32)
 
     for ci in range(Ci):
         print('IMAGE ci', ci)
@@ -230,7 +230,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
         
         for i in range(6):
             for j in range(6):
-                V2[ci, i, j] = V[i, j]
+                V2[i, j, ci] = V[i, j]
 
         # I = I.reshape(Ci, iH, iW, N)
 
@@ -273,13 +273,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     M = np.zeros((oH + 2, oW + 2), dtype=np.float32)
     for mh in range(oH+2):
         for mw in range(oW+2):
-        #M = U.dot(V)
-        #print('M', M)
-            sum = 0
-            for ci in range(Ci):
-                sum += U2[mh,mw,ci] * V2[ci,mh,mw]
-            # M[mh, mw] = U2[mh,mw].dot(V2[mh,mw])
-            M[mh, mw] = sum
+            M[mh, mw] = U2[mh,mw].dot(V2[mh,mw])
     print('M', M)
     
     # inverse transform
