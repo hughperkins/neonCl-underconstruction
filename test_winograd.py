@@ -155,37 +155,9 @@ def checkO(O, W, I, c, h, w, n, eps=1e-4):
     # assert diff < eps
     return cpu_value
 
-def process(iH, iW, N, Ci, Co, kH=3, kW=3):
-    np.random.seed(123)
-
+def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
     oH = iH
     oW = iW
-
-    W = np.random.randn(Ci,kH,kW,Co).astype(np.float32)
-    #W.fill(0)
-    W[0, 0, 0, 0] = 3
-    W[1, 0, 0, 0] = 4
-    W[1, 0, 1, 0] = 7
-    W[1, 1, 1, 0] = 0.3
-    W[0, 1, 1, 0] = 5
-    #print('W', W)
-
-    Wfull = W
-
-    I = np.zeros((Ci,iH, iW,N), dtype=np.float32)
-    I[:] = np.random.randn(*I.shape)
-    #I.fill(0)
-    I[0, 0, 0, 0] = 5
-    I[0, 0, 1, 0] = 2
-    #Inopadded = I
-    Ifull = I
-
-#    print('Inopadded', Inopadded)
-#    print('Ipadded', Ipadded)
-
-    print('Co', Co, 'iH', iH, 'iW', iW, 'N', N)
-    O = np.zeros((Co, oH, oW, N), dtype=np.float32)
-    Ofull = O
 
     BT = np.array([[4,0,-5,0,1,0],
           [0,-4,-4,1,1,0],
@@ -209,7 +181,11 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     # I = I.reshape(iH, iW)
 
     U2 = np.zeros((6, 6, Co, Ci), dtype=np.float32)
-    V2 = np.zeros((6, 6, Ci), dtype=np.float32)
+    V2 = np.zeros((6, 6, Ci, 1), dtype=np.float32)
+    
+    Ifull = I
+    Wfull = W
+    Ofull = O
 
     for co in range(Co):
         for ci in range(Ci):
@@ -225,8 +201,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
                 Utmp[3][i] = 1/24 * W[0][i] + 1/12 * W[1][i] + 1/6 * W[2][i]
                 Utmp[4][i] = 1/24 * W[0][i] - 1/12 * W[1][i] + 1/6 * W[2][i]
                 Utmp[5][i] = W[2][i]
-            #print('Utmp', Utmp)
-            #print('GT.dot(W)', G.dot(W))
+            print('Utmp', Utmp)
+            print('GT.dot(W)', G.dot(W))
 
             U = np.zeros((6, 6), dtype=np.float32)  # transformed filter
             for i in range(6):
@@ -236,8 +212,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
                 U[i][3] = 1/24 * Utmp[i][0] + 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
                 U[i][4] = 1/24 * Utmp[i][0] - 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
                 U[i][5] = Utmp[i][2]
-            #print('U', U)
-            #print('(G.dot(W)).dot(G.T)', (G.dot(W)).dot(G.T))
+            print('U', U)
+            print('(G.dot(W)).dot(G.T)', (G.dot(W)).dot(G.T))
             #W = W.reshape(Ci, kH, kW, Co)
             W = Wall
 
@@ -249,7 +225,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
         print('IMAGE ci', ci)
         # transform image
         Ipadded = np.zeros((iH + 2, oH + 2), dtype=np.float32)
-        Ipadded[1:5,1:5] = Ifull[ci,:,:,0]
+        Ipadded[1:5,1:5] = Ifull[ci,:,:,n]
         I = Ipadded
         Vtmp = np.zeros((6,6), dtype=np.float32)
         for i in range(6):
@@ -259,8 +235,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
             Vtmp[3][i] = - 2 * I[1][i] -     I[2][i] + 2 * I[3][i] + I[4][i]
             Vtmp[4][i] = + 2 * I[1][i] -     I[2][i] - 2 * I[3][i] + I[4][i]
             Vtmp[5][i] = + 4 * I[1][i]               - 5 * I[3][i]           + I[5][i]
-        #print('Vtmp', Vtmp)
-        #print('BT.dot(I)', BT.dot(I))
+        print('Vtmp', Vtmp)
+        print('BT.dot(I)', BT.dot(I))
 
     # B
     #  4  0  0  0  0  0
@@ -279,36 +255,43 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
             V[i][3] = - 2 * Vtmp[i][1] -     Vtmp[i][2] + 2 * Vtmp[i][3] + Vtmp[i][4]
             V[i][4] = + 2 * Vtmp[i][1] -     Vtmp[i][2] - 2 * Vtmp[i][3] + Vtmp[i][4]
             V[i][5] = + 4 * Vtmp[i][1]               - 5 * Vtmp[i][3]           + Vtmp[i][5]
-        #print('V', V)
-        #print('(BT.dot(I)).dot(BT.t())', (BT.dot(I)).dot(BT.T))
+        print('V', V)
+        print('(BT.dot(I)).dot(BT.t())', (BT.dot(I)).dot(BT.T))
         
         for i in range(6):
             for j in range(6):
-                V2[i, j, ci] = V[i, j]
+                V2[i, j, ci, 0] = V[i, j]
 
-        # I = I.reshape(Ci, iH, iW, N)
+            # I = I.reshape(Ci, iH, iW, N)
 
-        # filters
+            # filters
 
     # M = np.zeros((N, Co, 1, 1)
-    M = np.zeros((Co, oH + 2, oW + 2), dtype=np.float32)
+    M = np.zeros((Co, 1, oH + 2, oW + 2), dtype=np.float32)
     for mh in range(oH+2):
         for mw in range(oW+2):
-            #print('mh', mh, 'mw', mw)
-            #print('U2[mh,mw].shape', U2[mh,mw].shape)
-            #print('V2[mh,mw].shape', V2[mh,mw].shape)
-            #print('U2[mh,mw].dot(V2[mh,mw]).shape', U2[mh,mw].dot(V2[mh,mw]).shape)
-            #print('U2[mh,mw].dot(V2[mh,mw])')
-            #print(U2[mh,mw].dot(V2[mh,mw]))
-            M[:, mh, mw] = U2[mh,mw].dot(V2[mh,mw])
+            print('mh', mh, 'mw', mw)
+            print('U2[mh,mw].shape', U2[mh,mw].shape)
+            print('V2[mh,mw].shape', V2[mh,mw].shape)
+            print('U2[mh,mw].dot(V2[mh,mw]).shape', U2[mh,mw].dot(V2[mh,mw]).shape)
+            print('U2[mh,mw].dot(V2[mh,mw])')
+            print(U2[mh,mw].dot(V2[mh,mw]))
+            M[:, :, mh, mw] = U2[mh,mw].dot(V2[mh,mw])
+            Mtemp = np.zeros((Co, 1), dtype=np.float32)
+            for co in range(Co):
+                sum = 0
+                for ci in range(Ci):
+                   sum += U2[mh,mw,co,ci] * V2[mh,mw,ci,0]
+                Mtemp[co,0] = sum
+            print('Mtemp', Mtemp)
     #print('M', M)
 #    sys.exit(1)
     
     Mfull = M
     # inverse transform
     for co in range(Co):
-        M = Mfull[co]
-        O = Ofull[co].reshape(4,4)
+        M = Mfull[co, 0]
+        O = Ofull[co,:,:,n].reshape(4,4)
         Otmp = np.zeros((4, 6), dtype=np.float32)
         for i in range(6):
             Otmp[0][i] = M[0][i] + M[1][i] + M[2][i] + M[3][i] + M[4][i]
@@ -325,6 +308,41 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 #        O = O.reshape(Co, 4, 4, N)
         # print('AT.dot(M).dot(AT.T)', AT.dot(M).dot(AT.T))
 
+def process(iH, iW, N, Ci, Co, kH=3, kW=3):
+    np.random.seed(123)
+
+    oH = iH
+    oW = iW
+
+    W = np.random.randn(Ci,kH,kW,Co).astype(np.float32)
+    #W.fill(0)
+    #W[0, 0, 0, 0] = 3
+    #W[1, 0, 0, 0] = 4
+    #W[1, 0, 1, 0] = 7
+    #W[1, 1, 1, 0] = 0.3
+    #W[0, 1, 1, 0] = 5
+    #print('W', W)
+
+    Wfull = W
+
+    I = np.zeros((Ci,iH, iW,N), dtype=np.float32)
+    I[:] = np.random.randn(*I.shape)
+    #I.fill(0)
+    I[0, 0, 0, 0] = 5
+    I[0, 0, 1, 0] = 2
+    #Inopadded = I
+    Ifull = I
+
+#    print('Inopadded', Inopadded)
+#    print('Ipadded', Ipadded)
+
+    print('Co', Co, 'iH', iH, 'iW', iW, 'N', N)
+    O = np.zeros((Co, oH, oW, N), dtype=np.float32)
+    Ofull = O
+
+    for n in range(N):
+        process_one(iH=iH, iW=iW, Ci=Ci, Co=Co, kH=kH, kW=kW, n=n, I=I, W=W, O=O)
+
     I = Ifull
     W = Wfull
     O = Ofull
@@ -332,9 +350,9 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 
 def simple1():
     image_size = 4
-    N = 1
+    N = 2
     Ci = 4
-    Co = 8
+    Co = 4
     
     res = process(iH=image_size, iW=image_size, N=N, Ci=Ci,
         Co=Co)
@@ -342,17 +360,18 @@ def simple1():
     O = res['O']
     I = res['I']
     W = res['W']
-    print('wino O[0,:,:,0]')
+    # print('wino O[0,:,:,0]')
 
     cpuO = np.zeros((Co, image_size, image_size, N), dtype=np.float32)
-    for co in range(Co):
-        for h in range(image_size):
-            for w in range(image_size):
-                cpuvalue = checkO(W=W, I=I, O=O, c=co, h=h, w=w, n=0)
-                cpuO[co, h, w, 0] = cpuvalue
+    for n in range(N):
+        for co in range(Co):
+            for h in range(image_size):
+                for w in range(image_size):
+                    cpuvalue = checkO(W=W, I=I, O=O, c=co, h=h, w=w, n=n)
+                    cpuO[co, h, w, n] = cpuvalue
     #print('cpuO[0]', cpuO[0])
-    for n in [0]:
-      for co in [0,1,2,3, 7]:
+    for n in [0,1]:
+      for co in [0,2,3]:
         print('co', co, 'n', n)
         print('winograd')
         print(O[co,:,:,n].reshape(image_size, image_size))
