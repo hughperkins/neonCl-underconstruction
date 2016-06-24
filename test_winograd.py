@@ -168,7 +168,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     W[1, 0, 1, 0] = 7
     W[1, 1, 1, 0] = 0.3
     W[0, 1, 1, 0] = 5
-    print('W', W)
+    #print('W', W)
 
     Wfull = W
 
@@ -216,7 +216,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
             print('FILTER ci', ci)
             Wall = W
             W = W[ci,:,:,co].reshape(3,3)
-            print('W.shape', W.shape)
+            #print('W.shape', W.shape)
             Utmp = np.zeros((6, 3), dtype=np.float32)
             for i in range(3):
                 Utmp[0][i] = 1/4 * W[0][i]
@@ -225,8 +225,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
                 Utmp[3][i] = 1/24 * W[0][i] + 1/12 * W[1][i] + 1/6 * W[2][i]
                 Utmp[4][i] = 1/24 * W[0][i] - 1/12 * W[1][i] + 1/6 * W[2][i]
                 Utmp[5][i] = W[2][i]
-            print('Utmp', Utmp)
-            print('GT.dot(W)', G.dot(W))
+            #print('Utmp', Utmp)
+            #print('GT.dot(W)', G.dot(W))
 
             U = np.zeros((6, 6), dtype=np.float32)  # transformed filter
             for i in range(6):
@@ -236,8 +236,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
                 U[i][3] = 1/24 * Utmp[i][0] + 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
                 U[i][4] = 1/24 * Utmp[i][0] - 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
                 U[i][5] = Utmp[i][2]
-            print('U', U)
-            print('(G.dot(W)).dot(G.T)', (G.dot(W)).dot(G.T))
+            #print('U', U)
+            #print('(G.dot(W)).dot(G.T)', (G.dot(W)).dot(G.T))
             #W = W.reshape(Ci, kH, kW, Co)
             W = Wall
 
@@ -259,8 +259,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
             Vtmp[3][i] = - 2 * I[1][i] -     I[2][i] + 2 * I[3][i] + I[4][i]
             Vtmp[4][i] = + 2 * I[1][i] -     I[2][i] - 2 * I[3][i] + I[4][i]
             Vtmp[5][i] = + 4 * I[1][i]               - 5 * I[3][i]           + I[5][i]
-        print('Vtmp', Vtmp)
-        print('BT.dot(I)', BT.dot(I))
+        #print('Vtmp', Vtmp)
+        #print('BT.dot(I)', BT.dot(I))
 
     # B
     #  4  0  0  0  0  0
@@ -279,8 +279,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
             V[i][3] = - 2 * Vtmp[i][1] -     Vtmp[i][2] + 2 * Vtmp[i][3] + Vtmp[i][4]
             V[i][4] = + 2 * Vtmp[i][1] -     Vtmp[i][2] - 2 * Vtmp[i][3] + Vtmp[i][4]
             V[i][5] = + 4 * Vtmp[i][1]               - 5 * Vtmp[i][3]           + Vtmp[i][5]
-        print('V', V)
-        print('(BT.dot(I)).dot(BT.t())', (BT.dot(I)).dot(BT.T))
+        #print('V', V)
+        #print('(BT.dot(I)).dot(BT.t())', (BT.dot(I)).dot(BT.T))
         
         for i in range(6):
             for j in range(6):
@@ -294,14 +294,14 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     M = np.zeros((Co, oH + 2, oW + 2), dtype=np.float32)
     for mh in range(oH+2):
         for mw in range(oW+2):
-            print('mh', mh, 'mw', mw)
-            print('U2[mh,mw].shape', U2[mh,mw].shape)
-            print('V2[mh,mw].shape', V2[mh,mw].shape)
-            print('U2[mh,mw].dot(V2[mh,mw]).shape', U2[mh,mw].dot(V2[mh,mw]).shape)
-            print('U2[mh,mw].dot(V2[mh,mw])')
-            print(U2[mh,mw].dot(V2[mh,mw]))
+            #print('mh', mh, 'mw', mw)
+            #print('U2[mh,mw].shape', U2[mh,mw].shape)
+            #print('V2[mh,mw].shape', V2[mh,mw].shape)
+            #print('U2[mh,mw].dot(V2[mh,mw]).shape', U2[mh,mw].dot(V2[mh,mw]).shape)
+            #print('U2[mh,mw].dot(V2[mh,mw])')
+            #print(U2[mh,mw].dot(V2[mh,mw]))
             M[:, mh, mw] = U2[mh,mw].dot(V2[mh,mw])
-    print('M', M)
+    #print('M', M)
 #    sys.exit(1)
     
     Mfull = M
@@ -315,7 +315,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
             Otmp[1][i] =         + M[1][i] - M[2][i] + 2 * M[3][i] - 2 * M[4][i]
             Otmp[2][i] =         + M[1][i] + M[2][i] + 4 * M[3][i] + 4 * M[4][i]
             Otmp[3][i] =         + M[1][i] - M[2][i] + 8 * M[3][i] - 8 * M[4][i] + M[5][i]
-        print('Otmp', Otmp)
+        #print('Otmp', Otmp)
 
         for i in range(4):
             O[i][0] = Otmp[i][0] + Otmp[i][1] + Otmp[i][2] + Otmp[i][3] + Otmp[i][4]
@@ -323,7 +323,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
             O[i][2] =         + Otmp[i][1] + Otmp[i][2] + 4 * Otmp[i][3] + 4 * Otmp[i][4]
             O[i][3] =         + Otmp[i][1] - Otmp[i][2] + 8 * Otmp[i][3] - 8 * Otmp[i][4] + Otmp[i][5]
 #        O = O.reshape(Co, 4, 4, N)
-        print('AT.dot(M).dot(AT.T)', AT.dot(M).dot(AT.T))
+        # print('AT.dot(M).dot(AT.T)', AT.dot(M).dot(AT.T))
 
     I = Ifull
     W = Wfull
