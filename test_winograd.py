@@ -23,6 +23,26 @@ its = 1
 
 mf = cl.mem_flags
 
+# https://gist.github.com/lbn/836313e283f5d47d2e4e
+#def matprint(mat, fmt="g"):
+#    col_maxes = [max([len(("{:"+fmt+"}").format(x)) for x in col]) for col in mat.T]
+#    for x in mat:
+#        for i, y in enumerate(x):
+#            print(("{:"+str(col_maxes[i])+fmt+"}").format(y), end="  ")
+#        print("")
+
+def printTensor(t):
+   dims = len(t.shape)
+   print('dims', dims)
+   if dims == 3:
+      for i in range(t.shape[0]):
+         print('[%s, ...' % i)
+         for x in range(t.shape[1]):
+            line = ''
+            for y in range(t.shape[2]):
+               line += '%.1f ' % t[i][x][y]
+            print(line)
+
 def printDims(W, I):
     Ci = W.shape[0]
     iH = I.shape[1]
@@ -165,7 +185,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 
     print('Co', Co, 'iH', iH, 'iW', iW, 'N', N)
     O = np.zeros((Co, oH, oW, N), dtype=np.float32)
-
+    Ofull = O
 
     BT = np.array([[4,0,-5,0,1,0],
           [0,-4,-4,1,1,0],
@@ -188,8 +208,42 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
         
     # I = I.reshape(iH, iW)
 
-    U2 = np.zeros((6, 6, Ci), dtype=np.float32)
+    U2 = np.zeros((6, 6, Co, Ci), dtype=np.float32)
     V2 = np.zeros((6, 6, Ci), dtype=np.float32)
+
+    for co in range(Co):
+        for ci in range(Ci):
+            print('FILTER ci', ci)
+            Wall = W
+            W = W[ci,:,:,0].reshape(3,3)
+            print('W.shape', W.shape)
+            Utmp = np.zeros((6, 3), dtype=np.float32)
+            for i in range(3):
+                Utmp[0][i] = 1/4 * W[0][i]
+                Utmp[1][i] = - 1/6 * (W[0][i] + W[1][i] + W[2][i])
+                Utmp[2][i] = - 1/6 *W[0][i] + 1/6 * W[1][i] - 1/6 * W[2][i]
+                Utmp[3][i] = 1/24 * W[0][i] + 1/12 * W[1][i] + 1/6 * W[2][i]
+                Utmp[4][i] = 1/24 * W[0][i] - 1/12 * W[1][i] + 1/6 * W[2][i]
+                Utmp[5][i] = W[2][i]
+            print('Utmp', Utmp)
+            print('GT.dot(W)', G.dot(W))
+
+            U = np.zeros((6, 6), dtype=np.float32)  # transformed filter
+            for i in range(6):
+                U[i][0] = 1/4 * Utmp[i][0]
+                U[i][1] = - 1/6 * Utmp[i][0] - 1/6 * Utmp[i][1] - 1/6 * Utmp[i][2]
+                U[i][2] = - 1/6 * Utmp[i][0] + 1/ 6 * Utmp[i][1] - 1 / 6 * Utmp[i][2]
+                U[i][3] = 1/24 * Utmp[i][0] + 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
+                U[i][4] = 1/24 * Utmp[i][0] - 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
+                U[i][5] = Utmp[i][2]
+            print('U', U)
+            print('(G.dot(W)).dot(G.T)', (G.dot(W)).dot(G.T))
+            #W = W.reshape(Ci, kH, kW, Co)
+            W = Wall
+
+            for i in range(6):
+                for j in range(6):
+                    U2[i, j, co, ci] = U[i, j]
 
     for ci in range(Ci):
         print('IMAGE ci', ci)
@@ -236,86 +290,66 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 
         # filters
 
-    for ci in range(Ci):
-        print('FILTER ci', ci)
-        Wall = W
-        W = W[ci,:,:,0].reshape(3,3)
-        print('W.shape', W.shape)
-        Utmp = np.zeros((6, 3), dtype=np.float32)
-        for i in range(3):
-            Utmp[0][i] = 1/4 * W[0][i]
-            Utmp[1][i] = - 1/6 * (W[0][i] + W[1][i] + W[2][i])
-            Utmp[2][i] = - 1/6 *W[0][i] + 1/6 * W[1][i] - 1/6 * W[2][i]
-            Utmp[3][i] = 1/24 * W[0][i] + 1/12 * W[1][i] + 1/6 * W[2][i]
-            Utmp[4][i] = 1/24 * W[0][i] - 1/12 * W[1][i] + 1/6 * W[2][i]
-            Utmp[5][i] = W[2][i]
-        print('Utmp', Utmp)
-        print('GT.dot(W)', G.dot(W))
-
-        U = np.zeros((6, 6), dtype=np.float32)  # transformed filter
-        for i in range(6):
-            U[i][0] = 1/4 * Utmp[i][0]
-            U[i][1] = - 1/6 * Utmp[i][0] - 1/6 * Utmp[i][1] - 1/6 * Utmp[i][2]
-            U[i][2] = - 1/6 * Utmp[i][0] + 1/ 6 * Utmp[i][1] - 1 / 6 * Utmp[i][2]
-            U[i][3] = 1/24 * Utmp[i][0] + 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
-            U[i][4] = 1/24 * Utmp[i][0] - 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
-            U[i][5] = Utmp[i][2]
-        print('U', U)
-        print('(G.dot(W)).dot(G.T)', (G.dot(W)).dot(G.T))
-        #W = W.reshape(Ci, kH, kW, Co)
-        W = Wall
-
-        for i in range(6):
-            for j in range(6):
-                U2[i, j, ci] = U[i, j]
-
     # M = np.zeros((N, Co, 1, 1)
-    M = np.zeros((oH + 2, oW + 2), dtype=np.float32)
+    M = np.zeros((Co, oH + 2, oW + 2), dtype=np.float32)
     for mh in range(oH+2):
         for mw in range(oW+2):
-            M[mh, mw] = U2[mh,mw].dot(V2[mh,mw])
+            print('U2[mh,mw].shape', U2[mh,mw].shape)
+            print('V2[mh,mw].shape', V2[mh,mw].shape)
+            print('U2[mh,mw].dot(V2[mh,mw]).shape', U2[mh,mw].dot(V2[mh,mw]).shape)
+            M[:, mh, mw] = U2[mh,mw].dot(V2[mh,mw])
     print('M', M)
+#    sys.exit(1)
     
+    Mfull = M
     # inverse transform
-    O = O.reshape(4,4)
-    Otmp = np.zeros((4, 6), dtype=np.float32)
-    for i in range(6):
-        Otmp[0][i] = M[0][i] + M[1][i] + M[2][i] + M[3][i] + M[4][i]
-        Otmp[1][i] =         + M[1][i] - M[2][i] + 2 * M[3][i] - 2 * M[4][i]
-        Otmp[2][i] =         + M[1][i] + M[2][i] + 4 * M[3][i] + 4 * M[4][i]
-        Otmp[3][i] =         + M[1][i] - M[2][i] + 8 * M[3][i] - 8 * M[4][i] + M[5][i]
-    print('Otmp', Otmp)
+    for co in range(Co):
+        M = Mfull[co]
+        O = Ofull[co].reshape(4,4)
+        Otmp = np.zeros((4, 6), dtype=np.float32)
+        for i in range(6):
+            Otmp[0][i] = M[0][i] + M[1][i] + M[2][i] + M[3][i] + M[4][i]
+            Otmp[1][i] =         + M[1][i] - M[2][i] + 2 * M[3][i] - 2 * M[4][i]
+            Otmp[2][i] =         + M[1][i] + M[2][i] + 4 * M[3][i] + 4 * M[4][i]
+            Otmp[3][i] =         + M[1][i] - M[2][i] + 8 * M[3][i] - 8 * M[4][i] + M[5][i]
+        print('Otmp', Otmp)
 
-    for i in range(4):
-        O[i][0] = Otmp[i][0] + Otmp[i][1] + Otmp[i][2] + Otmp[i][3] + Otmp[i][4]
-        O[i][1] =         + Otmp[i][1] - Otmp[i][2] + 2 * Otmp[i][3] - 2 * Otmp[i][4]
-        O[i][2] =         + Otmp[i][1] + Otmp[i][2] + 4 * Otmp[i][3] + 4 * Otmp[i][4]
-        O[i][3] =         + Otmp[i][1] - Otmp[i][2] + 8 * Otmp[i][3] - 8 * Otmp[i][4] + Otmp[i][5]
+        for i in range(4):
+            O[i][0] = Otmp[i][0] + Otmp[i][1] + Otmp[i][2] + Otmp[i][3] + Otmp[i][4]
+            O[i][1] =         + Otmp[i][1] - Otmp[i][2] + 2 * Otmp[i][3] - 2 * Otmp[i][4]
+            O[i][2] =         + Otmp[i][1] + Otmp[i][2] + 4 * Otmp[i][3] + 4 * Otmp[i][4]
+            O[i][3] =         + Otmp[i][1] - Otmp[i][2] + 8 * Otmp[i][3] - 8 * Otmp[i][4] + Otmp[i][5]
+#        O = O.reshape(Co, 4, 4, N)
+        print('AT.dot(M).dot(AT.T)', AT.dot(M).dot(AT.T))
+
     I = Ifull
     W = Wfull
-    O = O.reshape(Co, 4, 4, N)
-    print('AT.dot(M).dot(AT.T)', AT.dot(M).dot(AT.T))
+    O = Ofull
     return {'W': W, 'O': O, 'I': I}
 
 def simple1():
     image_size = 4
     N = 1
     Ci = 4
-    Co = 1
+    Co = 8
     
     res = process(iH=image_size, iW=image_size, N=N, Ci=Ci,
         Co=Co)
+    np.set_printoptions(precision=2, suppress=True)
     O = res['O']
     I = res['I']
     W = res['W']
-    print('wino O', O)
+    print('wino O[0,:,:,0]')
+    print(O[0,:,:,0].reshape(image_size, image_size))
 
     cpuO = np.zeros((Co, image_size, image_size, N), dtype=np.float32)
     for h in range(image_size):
         for w in range(image_size):
             cpuvalue = checkO(W=W, I=I, O=O, c=0, h=h, w=w, n=0)
             cpuO[0, h, w, 0] = cpuvalue
-    print('cpuO', cpuO)
+    #print('cpuO[0]', cpuO[0])
+    print(cpuO[0,:,:,0].reshape(image_size,image_size))
+    #printTensor(cpuO[0])
 
    # checkO(W=W, I=I, O=O, c=0, h=0, w=0, n=0)
    # checkO(W=W, I=I, O=O, c=0, h=0, w=0, n=1)
