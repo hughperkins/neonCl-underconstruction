@@ -215,7 +215,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
         for ci in range(Ci):
             print('FILTER ci', ci)
             Wall = W
-            W = W[ci,:,:,0].reshape(3,3)
+            W = W[ci,:,:,co].reshape(3,3)
             print('W.shape', W.shape)
             Utmp = np.zeros((6, 3), dtype=np.float32)
             for i in range(3):
@@ -294,9 +294,12 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     M = np.zeros((Co, oH + 2, oW + 2), dtype=np.float32)
     for mh in range(oH+2):
         for mw in range(oW+2):
+            print('mh', mh, 'mw', mw)
             print('U2[mh,mw].shape', U2[mh,mw].shape)
             print('V2[mh,mw].shape', V2[mh,mw].shape)
             print('U2[mh,mw].dot(V2[mh,mw]).shape', U2[mh,mw].dot(V2[mh,mw]).shape)
+            print('U2[mh,mw].dot(V2[mh,mw])')
+            print(U2[mh,mw].dot(V2[mh,mw]))
             M[:, mh, mw] = U2[mh,mw].dot(V2[mh,mw])
     print('M', M)
 #    sys.exit(1)
@@ -340,15 +343,21 @@ def simple1():
     I = res['I']
     W = res['W']
     print('wino O[0,:,:,0]')
-    print(O[0,:,:,0].reshape(image_size, image_size))
 
     cpuO = np.zeros((Co, image_size, image_size, N), dtype=np.float32)
-    for h in range(image_size):
-        for w in range(image_size):
-            cpuvalue = checkO(W=W, I=I, O=O, c=0, h=h, w=w, n=0)
-            cpuO[0, h, w, 0] = cpuvalue
+    for co in range(Co):
+        for h in range(image_size):
+            for w in range(image_size):
+                cpuvalue = checkO(W=W, I=I, O=O, c=co, h=h, w=w, n=0)
+                cpuO[co, h, w, 0] = cpuvalue
     #print('cpuO[0]', cpuO[0])
-    print(cpuO[0,:,:,0].reshape(image_size,image_size))
+    for n in [0]:
+      for co in [0,1,2,3, 7]:
+        print('co', co, 'n', n)
+        print('winograd')
+        print(O[co,:,:,n].reshape(image_size, image_size))
+        print('cpu')
+        print(cpuO[co,:,:,n].reshape(image_size,image_size))
     #printTensor(cpuO[0])
 
    # checkO(W=W, I=I, O=O, c=0, h=0, w=0, n=0)
