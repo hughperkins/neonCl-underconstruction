@@ -328,8 +328,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     I = np.zeros((Ci,iH, iW,N), dtype=np.float32)
     I[:] = np.random.randn(*I.shape)
     #I.fill(0)
-    I[0, 0, 0, 0] = 5
-    I[0, 0, 1, 0] = 2
+    #I[0, 0, 0, 0] = 5
+    #I[0, 0, 1, 0] = 2
     #Inopadded = I
     Ifull = I
 
@@ -350,10 +350,10 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 
 def simple1():
     image_size = 4
-    N = 2
-    Ci = 4
-    Co = 4
-    
+    N = 1
+    Ci = 1
+    Co = 1
+ 
     res = process(iH=image_size, iW=image_size, N=N, Ci=Ci,
         Co=Co)
     np.set_printoptions(precision=2, suppress=True)
@@ -370,13 +370,16 @@ def simple1():
                     cpuvalue = checkO(W=W, I=I, O=O, c=co, h=h, w=w, n=n)
                     cpuO[co, h, w, n] = cpuvalue
     #print('cpuO[0]', cpuO[0])
-    for n in [0,1]:
-      for co in [0,2,3]:
+    n_values = np.random.choice(N, (min(N, 3),), False)
+    co_values = np.random.choice(Co, (min(Co, 3),), False)
+    for n in n_values:
+      for co in co_values:
         print('co', co, 'n', n)
         print('winograd')
         print(O[co,:,:,n].reshape(image_size, image_size))
         print('cpu')
         print(cpuO[co,:,:,n].reshape(image_size,image_size))
+        assert np.allclose(O[co,:,:,n], cpuO[co,:,:,n], atol=1e-4)
     #printTensor(cpuO[0])
 
    # checkO(W=W, I=I, O=O, c=0, h=0, w=0, n=0)
