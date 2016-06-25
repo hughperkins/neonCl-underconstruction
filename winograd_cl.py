@@ -1,4 +1,4 @@
-# Copyright 2016 Hugh Perkins, All rights reserved.
+# Copyright 2016 Hugh Perkins, 2014 Nervana Systems Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,9 @@ import time
 import pyopencl as cl
 from neoncl import api
 import pyopencl as cl
+from neoncl.util.math_helper import get_div_mul_shift_32, get_div_mul_shift_64, ceil_div
+import winograd_kernels_cl
+
 
 gpu_idx = 0
 
@@ -37,6 +40,7 @@ q = cl.CommandQueue(ctx)
 
 mf = cl.mem_flags
 
+fprop_filter_trans_kernel = winograd_kernels_cl.get_fprop_filter_trans_kernel(ctx)
 
 its = 1
 
@@ -177,12 +181,11 @@ def timecheck(label):
     print(label, '%.2f' % ((now - last) * 1000))
     last = now
 
-def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
+def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, O):
     oH = iH
     oW = iW
 
     tiles = iW // 4
-    inittime()
     BT = np.array([[4,0,-5,0,1,0],
           [0,-4,-4,1,1,0],
           [0,4,-4,-1,1,0],
@@ -190,52 +193,16 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
           [0,2,-1,-2,1,0],
           [0,4,0,-5,0,1]], dtype=np.float32)
 
-    G = np.array([[1/4,0,0],
-        [-1/6,-1/6,-1/6],
-        [-1/6,1/6,-1/6],
-        [1/24,1/12,1/6],
-        [1/24,-1/12,1/6],
-        [0,0,1]], dtype=np.float32)
-
     AT = np.array([[1,1,1,1,1,0],
         [0,1,-1,2,-2,0],
         [0,1,1,4,4,0],
         [0,1,-1,8,-8,1]], dtype=np.float32)
 
     Ifull = I
-    Wfull = W
+    # Wfull = W
     Ofull = O
     timecheck('allocated BT G AT')
-    U2 = np.zeros((6, 6, Co, Ci), dtype=np.float32)
-    Utmp = np.zeros((6, 3), dtype=np.float32)
-    U = np.zeros((6, 6), dtype=np.float32)  # transformed filter
-    timecheck('allocaed U')
-    for co in range(Co):
-        for ci in range(Ci):
-            W = Wfull[ci,:,:,co].reshape(3,3)
-            #for i in range(3):
-                #Utmp[0][i] = 1/4 * W[0][i]
-                #Utmp[1][i] = - 1/6 * (W[0][i] + W[1][i] + W[2][i])
-                #Utmp[2][i] = - 1/6 *W[0][i] + 1/6 * W[1][i] - 1/6 * W[2][i]
-                #Utmp[3][i] = 1/24 * W[0][i] + 1/12 * W[1][i] + 1/6 * W[2][i]
-                #Utmp[4][i] = 1/24 * W[0][i] - 1/12 * W[1][i] + 1/6 * W[2][i]
-                #Utmp[5][i] = W[2][i]
-            Utmp = G.dot(W)
 
-            #for i in range(6):
-                #U[i][0] = 1/4 * Utmp[i][0]
-                #U[i][1] = - 1/6 * Utmp[i][0] - 1/6 * Utmp[i][1] - 1/6 * Utmp[i][2]
-                #U[i][2] = - 1/6 * Utmp[i][0] + 1/ 6 * Utmp[i][1] - 1 / 6 * Utmp[i][2]
-                #U[i][3] = 1/24 * Utmp[i][0] + 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
-                #U[i][4] = 1/24 * Utmp[i][0] - 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
-                #U[i][5] = Utmp[i][2]
-            U = Utmp.dot(G.T)
-
-            U2[:,:,co,ci] = U
-            #for i in range(6):
-            #    for j in range(6):
-            #        U2[i, j, co, ci] = U[i, j]
-    timecheck('calced U2')
     V2 = np.zeros((6, 6, Ci, tiles, tiles), dtype=np.float32)
     timecheck('allocaed V2')
     V = np.zeros((6, 6), dtype=np.float32) # transformed image
@@ -287,7 +254,7 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
     for mh in range(6):
         for mw in range(6):
             #print('U2[mh,mw].shape', U2[mh,mw].shape, V2[mh,mw].shape)
-            M[:, :, :, mh, mw] = np.tensordot(U2[mh,mw], V2[mh,mw], 1)
+            M[:, :, :, mh, mw] = np.tensordot(U[mh,mw], V2[mh,mw], 1)
             # res = np.tensordot(U2[mh,mw], V2[mh,mw], 1)
             #print('res.shape', res.shape)
             # M[:, :, :, mh, mw] = res
@@ -318,7 +285,98 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
                 O[:] = Otmp.dot(AT.T)
     timecheck('calced O')
 
+def calcU(q, W):
+    G = np.array([[1/4,0,0],
+        [-1/6,-1/6,-1/6],
+        [-1/6,1/6,-1/6],
+        [1/24,1/12,1/6],
+        [1/24,-1/12,1/6],
+        [0,0,1]], dtype=np.float32)
+
+    Ci = W.shape[0]
+    Co = W.shape[3]
+
+    Wfull = W
+
+    U2 = np.zeros((6, 6, Co, Ci), dtype=np.float32)
+    Utmp = np.zeros((6, 3), dtype=np.float32)
+    U = np.zeros((6, 6), dtype=np.float32)  # transformed filter
+    timecheck('allocaed U')
+
+    for co in range(Co):
+        for ci in range(Ci):
+            W = Wfull[ci,:,:,co].reshape(3,3)
+            #for i in range(3):
+                #Utmp[0][i] = 1/4 * W[0][i]
+                #Utmp[1][i] = - 1/6 * (W[0][i] + W[1][i] + W[2][i])
+                #Utmp[2][i] = - 1/6 *W[0][i] + 1/6 * W[1][i] - 1/6 * W[2][i]
+                #Utmp[3][i] = 1/24 * W[0][i] + 1/12 * W[1][i] + 1/6 * W[2][i]
+                #Utmp[4][i] = 1/24 * W[0][i] - 1/12 * W[1][i] + 1/6 * W[2][i]
+                #Utmp[5][i] = W[2][i]
+            Utmp = G.dot(W)
+
+            #for i in range(6):
+                #U[i][0] = 1/4 * Utmp[i][0]
+                #U[i][1] = - 1/6 * Utmp[i][0] - 1/6 * Utmp[i][1] - 1/6 * Utmp[i][2]
+                #U[i][2] = - 1/6 * Utmp[i][0] + 1/ 6 * Utmp[i][1] - 1 / 6 * Utmp[i][2]
+                #U[i][3] = 1/24 * Utmp[i][0] + 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
+                #U[i][4] = 1/24 * Utmp[i][0] - 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
+                #U[i][5] = Utmp[i][2]
+            U = Utmp.dot(G.T)
+
+            U2[:,:,co,ci] = U
+            #for i in range(6):
+            #    for j in range(6):
+            #        U2[i, j, co, ci] = U[i, j]
+    timecheck('calced U2')
+    # print('U from python', U2)
+    return U2
+
+    # this is adapted from neon's winograd_conv.py:
+    if N == 1:
+        shiftN = 0
+    elif N < 32:
+        shiftN = len(bin(N-1))-2
+    else:
+        shiftN = 5
+    blkN = 1 << shiftN
+
+    shiftY, shiftX, superY, superX = {
+        1 : (3,4,0x203,0x300), # 4x8
+        2 : (3,3,0x203,0x201), # 4x4
+        4 : (2,3,0x104,0x202), # 2x4
+        8 : (2,2,0x104,0x103), # 2x2
+        16: (1,2,0x000,0x104), # 1x2
+        32: (1,1,0x000,0x000), # 1x1
+    }.get(blkN)
+
+    gridCo = ceil_div(Co, 32)
+    # gridY = ceil_div(oH, 1<<shiftY)
+    # gridX = ceil_div(oY, 1<<shiftX)
+    # gridN = ceil_div(N, blkN)
+    # Y2    = gridY // 2
+    # X2    = gridX  * 2
+
+    dtype_itemsize = 4
+    trans_size   = C * gridCo * 512 * dtype_itemsize
+    trans_shared = 512 * dtype_itemsize
+    trans_args   = [(gridK, C, 1), (32, 1, 1), None,
+                     None, None, kH*kW*Co, kW*Co, kW*Co*2, Co]
+    W_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=W)
+    U_from_cl = np.zeros((6, 6, Co, Ci), dtype=np.float32)
+    U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U_from_cl)
+    
+    fprop_filter_trans_kernel(
+        q, U_cl, W_cl, kH * kW * Co, kW * Co, kW * Co * 2,
+        Co,
+        cl.LocalMemory(trans_shared))
+
+    cl.enqueue_copy(q, U_from_cl, U_cl)
+    print('U_from_cl', U_from_cl)
+    return U2
+
 def process(iH, iW, N, Ci, Co, kH=3, kW=3):
+    inittime()
     np.random.seed(123)
 
     oH = iH
@@ -336,8 +394,10 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     O = np.zeros((Co, oH, oW, N), dtype=np.float32)
     Ofull = O
 
+    U = calcU(q=q, W=W)
     for n in range(N):
-        process_one(iH=iH, iW=iW, Ci=Ci, Co=Co, kH=kH, kW=kW, n=n, I=I, W=W, O=O)
+        print('n', n)
+        process_one(iH=iH, iW=iW, Ci=Ci, Co=Co, kH=kH, kW=kW, n=n, I=I, U=U, O=O)
 
     I = Ifull
     W = Wfull
