@@ -21,9 +21,12 @@ def get_fprop_filter_trans_kernel(ctx):
     print('get_fprop_filter_trans_kernel')
 
     code = r"""
-kernel void fprop_filter_trans(global float* T, global const float* F, int RSK, int SK, int SK2, int K,
-    local float *share, local float *share4)
+kernel void fprop_filter_trans(global float4* T, global const float* F, int RSK, int SK, int SK2, int K,
+    local float *share)
 {
+
+    local float4 *share4 = (local float4 *)share;
+
     int tid  = get_local_id(0);
     int blkK = get_group_id(0);
     int c    = get_group_id(1);
@@ -100,10 +103,10 @@ kernel void fprop_filter_trans(global float* T, global const float* F, int RSK, 
     share[tid + 32* 7] = (F07);
     share[tid + 32*11] = (F11);
 
-    float batch0 = share4[tid +  0];
-    float batch1 = share4[tid + 32];
-    float batch2 = share4[tid + 64];
-    float batch3 = share4[tid + 96];
+    float4 batch0 = share4[tid +  0];
+    float4 batch1 = share4[tid + 32];
+    float4 batch2 = share4[tid + 64];
+    float4 batch3 = share4[tid + 96];
 
     int offset = c*get_num_groups(0)*128 + blkK*128 + tid;
 
