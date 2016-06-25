@@ -227,25 +227,26 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
     timecheck('calced U2')
     V2 = np.zeros((6, 6, Ci, tiles, tiles), dtype=np.float32)
     timecheck('allocaed V2')
+    V = np.zeros((6, 6), dtype=np.float32) # transformed image
+    Vtmp = np.zeros((6,6), dtype=np.float32)
     for th in range(tiles):
+        hstart = -1 + 4 * th
+        hend = hstart + 6 - 1
+        hstarttrunc = max(0, hstart)
+        hendtrunc = min(hend, iH - 1)
+        hstartoffset = hstarttrunc - hstart
+        hendoffset = hendtrunc - hstart
         for tw in range(tiles):
+            wstart = -1 + 4 * tw
+            wend = wstart + 6 - 1
+            wstarttrunc = max(0, wstart)
+            wendtrunc = min(wend, iW - 1)
+            wstartoffset = wstarttrunc - wstart
+            wendoffset = wendtrunc - wstart
+            Ipadded = np.zeros((6, 6), dtype=np.float32)
             for ci in range(Ci):
-                Ipadded = np.zeros((6, 6), dtype=np.float32)
-                wstart = -1 + 4 * tw
-                wend = wstart + 6 - 1
-                hstart = -1 + 4 * th
-                hend = hstart + 6 - 1
-                wstarttrunc = max(0, wstart)
-                hstarttrunc = max(0, hstart)
-                wendtrunc = min(wend, iW - 1)
-                hendtrunc = min(hend, iH - 1)
-                wstartoffset = wstarttrunc - wstart
-                hstartoffset = hstarttrunc - hstart
-                wendoffset = wendtrunc - wstart
-                hendoffset = hendtrunc - hstart
                 Ipadded[hstartoffset:hendoffset + 1,wstartoffset:wendoffset + 1] = Ifull[ci,hstarttrunc:hendtrunc+1,wstarttrunc:wendtrunc+1,n]
                 I = Ipadded
-                Vtmp = np.zeros((6,6), dtype=np.float32)
                 #for i in range(6):
                     #Vtmp[0][i] = + 4 * I[0][i] - 5 * I[2][i]               + I[4][i]
                     #Vtmp[1][i] = - 4 * I[1][i] - 4 * I[2][i] +     I[3][i] + I[4][i]
@@ -255,7 +256,6 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
                     #Vtmp[5][i] = + 4 * I[1][i]               - 5 * I[3][i]           + I[5][i]
                 Vtmp = BT.dot(I)
 
-                V = np.zeros((6, 6), dtype=np.float32) # transformed image
                 # each i is a row of V
                 #for i in range(6):
                     #V[i][0] = + 4 * Vtmp[i][0] - 5 * Vtmp[i][2]           + Vtmp[i][4]
@@ -264,8 +264,9 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
                     #V[i][3] = - 2 * Vtmp[i][1] -     Vtmp[i][2] + 2 * Vtmp[i][3] + Vtmp[i][4]
                     #V[i][4] = + 2 * Vtmp[i][1] -     Vtmp[i][2] - 2 * Vtmp[i][3] + Vtmp[i][4]
                     #V[i][5] = + 4 * Vtmp[i][1]               - 5 * Vtmp[i][3]           + Vtmp[i][5]
-                V = Vtmp.dot(BT.T)
-                V2[:,:,ci,th,tw] = V
+                V2[:,:,ci,th,tw] = Vtmp.dot(BT.T)
+                #V = Vtmp.dot(BT.T)
+                #V2[:,:,ci,th,tw] = V
 #                for i in range(6):
  #                   for j in range(6):
   #                      V2[i, j, ci, th, tw] = V[i, j]
@@ -333,13 +334,13 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     return {'W': W, 'O': O, 'I': I}
 
 def simple1():
-    image_size = 8
+    image_size = 16
     N = 4
     Ci = 16
     Co = 16
  
     start = time.time()
-    for it in range(10):
+    for it in range(5):
         res = process(iH=image_size, iW=image_size, N=N, Ci=Ci,
             Co=Co)
     end = time.time()
@@ -362,11 +363,11 @@ def simple1():
     co_values = np.random.choice(Co, (min(Co, 3),), False)
     for n in n_values:
       for co in co_values:
-        print('co', co, 'n', n)
-        print('winograd')
-        print(O[co,:,:,n].reshape(image_size, image_size))
-        print('cpu')
-        print(cpuO[co,:,:,n].reshape(image_size,image_size))
+        #print('co', co, 'n', n)
+        #print('winograd')
+        #print(O[co,:,:,n].reshape(image_size, image_size))
+        #print('cpu')
+        #print(cpuO[co,:,:,n].reshape(image_size,image_size))
         assert np.allclose(O[co,:,:,n], cpuO[co,:,:,n], atol=1e-4)
     #printTensor(cpuO[0])
 
