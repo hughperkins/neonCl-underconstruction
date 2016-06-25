@@ -278,11 +278,14 @@ def calcU(q, W):
     assert np.allclose(U_from_cl, U2, atol=1e-4)
     return U_from_cl
 
-def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, O):
-    oH = iH
-    oW = iW
-
+def calcV(I):
+    Ifull = I
+    Ci = I.shape[0]
+    iH = I.shape[1]
+    iW = I.shape[2]
+    N = I.shape[3]
     tiles = iW // 4
+
     BT = np.array([[4,0,-5,0,1,0],
           [0,-4,-4,1,1,0],
           [0,4,-4,-1,1,0],
@@ -290,68 +293,75 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, O):
           [0,2,-1,-2,1,0],
           [0,4,0,-5,0,1]], dtype=np.float32)
 
+    V2 = np.zeros((N, 6, 6, Ci, tiles, tiles), dtype=np.float32)
+    timecheck('allocaed V2')
+    for n in range(N):
+        V = np.zeros((6, 6), dtype=np.float32) # transformed image
+        Vtmp = np.zeros((6,6), dtype=np.float32)
+        for th in range(tiles):
+            hstart = -1 + 4 * th
+            hend = hstart + 6 - 1
+            hstarttrunc = max(0, hstart)
+            hendtrunc = min(hend, iH - 1)
+            hstartoffset = hstarttrunc - hstart
+            hendoffset = hendtrunc - hstart
+            for tw in range(tiles):
+                wstart = -1 + 4 * tw
+                wend = wstart + 6 - 1
+                wstarttrunc = max(0, wstart)
+                wendtrunc = min(wend, iW - 1)
+                wstartoffset = wstarttrunc - wstart
+                wendoffset = wendtrunc - wstart
+                Ipadded = np.zeros((6, 6), dtype=np.float32)
+                for ci in range(Ci):
+                    Ipadded[hstartoffset:hendoffset + 1,wstartoffset:wendoffset + 1] = Ifull[ci,hstarttrunc:hendtrunc+1,wstarttrunc:wendtrunc+1,n]
+                    I = Ipadded
+                    #for i in range(6):
+                        #Vtmp[0][i] = + 4 * I[0][i] - 5 * I[2][i]               + I[4][i]
+                        #Vtmp[1][i] = - 4 * I[1][i] - 4 * I[2][i] +     I[3][i] + I[4][i]
+                        #Vtmp[2][i] = + 4 * I[1][i] - 4 * I[2][i] -     I[3][i] + I[4][i]
+                        #Vtmp[3][i] = - 2 * I[1][i] -     I[2][i] + 2 * I[3][i] + I[4][i]
+                        #Vtmp[4][i] = + 2 * I[1][i] -     I[2][i] - 2 * I[3][i] + I[4][i]
+                        #Vtmp[5][i] = + 4 * I[1][i]               - 5 * I[3][i]           + I[5][i]
+                    Vtmp = BT.dot(I)
+
+                    # each i is a row of V
+                    #for i in range(6):
+                        #V[i][0] = + 4 * Vtmp[i][0] - 5 * Vtmp[i][2]           + Vtmp[i][4]
+                        #V[i][1] = - 4 * Vtmp[i][1] - 4 * Vtmp[i][2] +     Vtmp[i][3] + Vtmp[i][4]
+                        #V[i][2] = + 4 * Vtmp[i][1] - 4 * Vtmp[i][2] -     Vtmp[i][3] + Vtmp[i][4]
+                        #V[i][3] = - 2 * Vtmp[i][1] -     Vtmp[i][2] + 2 * Vtmp[i][3] + Vtmp[i][4]
+                        #V[i][4] = + 2 * Vtmp[i][1] -     Vtmp[i][2] - 2 * Vtmp[i][3] + Vtmp[i][4]
+                        #V[i][5] = + 4 * Vtmp[i][1]               - 5 * Vtmp[i][3]           + Vtmp[i][5]
+                    V2[n, :,:,ci,th,tw] = Vtmp.dot(BT.T)
+                    #V = Vtmp.dot(BT.T)
+                    #V2[:,:,ci,th,tw] = V
+    #                for i in range(6):
+     #                   for j in range(6):
+      #                      V2[i, j, ci, th, tw] = V[i, j]
+        timecheck('calced V2')
+    return V2
+
+def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, V, O):
+    oH = iH
+    oW = iW
+
+    tiles = iW // 4
     AT = np.array([[1,1,1,1,1,0],
         [0,1,-1,2,-2,0],
         [0,1,1,4,4,0],
         [0,1,-1,8,-8,1]], dtype=np.float32)
 
-    Ifull = I
+    # Ifull = I
     # Wfull = W
     Ofull = O
-    timecheck('allocated BT G AT')
-
-    V2 = np.zeros((6, 6, Ci, tiles, tiles), dtype=np.float32)
-    timecheck('allocaed V2')
-    V = np.zeros((6, 6), dtype=np.float32) # transformed image
-    Vtmp = np.zeros((6,6), dtype=np.float32)
-    for th in range(tiles):
-        hstart = -1 + 4 * th
-        hend = hstart + 6 - 1
-        hstarttrunc = max(0, hstart)
-        hendtrunc = min(hend, iH - 1)
-        hstartoffset = hstarttrunc - hstart
-        hendoffset = hendtrunc - hstart
-        for tw in range(tiles):
-            wstart = -1 + 4 * tw
-            wend = wstart + 6 - 1
-            wstarttrunc = max(0, wstart)
-            wendtrunc = min(wend, iW - 1)
-            wstartoffset = wstarttrunc - wstart
-            wendoffset = wendtrunc - wstart
-            Ipadded = np.zeros((6, 6), dtype=np.float32)
-            for ci in range(Ci):
-                Ipadded[hstartoffset:hendoffset + 1,wstartoffset:wendoffset + 1] = Ifull[ci,hstarttrunc:hendtrunc+1,wstarttrunc:wendtrunc+1,n]
-                I = Ipadded
-                #for i in range(6):
-                    #Vtmp[0][i] = + 4 * I[0][i] - 5 * I[2][i]               + I[4][i]
-                    #Vtmp[1][i] = - 4 * I[1][i] - 4 * I[2][i] +     I[3][i] + I[4][i]
-                    #Vtmp[2][i] = + 4 * I[1][i] - 4 * I[2][i] -     I[3][i] + I[4][i]
-                    #Vtmp[3][i] = - 2 * I[1][i] -     I[2][i] + 2 * I[3][i] + I[4][i]
-                    #Vtmp[4][i] = + 2 * I[1][i] -     I[2][i] - 2 * I[3][i] + I[4][i]
-                    #Vtmp[5][i] = + 4 * I[1][i]               - 5 * I[3][i]           + I[5][i]
-                Vtmp = BT.dot(I)
-
-                # each i is a row of V
-                #for i in range(6):
-                    #V[i][0] = + 4 * Vtmp[i][0] - 5 * Vtmp[i][2]           + Vtmp[i][4]
-                    #V[i][1] = - 4 * Vtmp[i][1] - 4 * Vtmp[i][2] +     Vtmp[i][3] + Vtmp[i][4]
-                    #V[i][2] = + 4 * Vtmp[i][1] - 4 * Vtmp[i][2] -     Vtmp[i][3] + Vtmp[i][4]
-                    #V[i][3] = - 2 * Vtmp[i][1] -     Vtmp[i][2] + 2 * Vtmp[i][3] + Vtmp[i][4]
-                    #V[i][4] = + 2 * Vtmp[i][1] -     Vtmp[i][2] - 2 * Vtmp[i][3] + Vtmp[i][4]
-                    #V[i][5] = + 4 * Vtmp[i][1]               - 5 * Vtmp[i][3]           + Vtmp[i][5]
-                V2[:,:,ci,th,tw] = Vtmp.dot(BT.T)
-                #V = Vtmp.dot(BT.T)
-                #V2[:,:,ci,th,tw] = V
-#                for i in range(6):
- #                   for j in range(6):
-  #                      V2[i, j, ci, th, tw] = V[i, j]
-    timecheck('calced V2')
+    timecheck('allocated AT')
 
     M = np.zeros((Co, tiles, tiles, 6, 6), dtype=np.float32)
     for mh in range(6):
         for mw in range(6):
             #print('U2[mh,mw].shape', U2[mh,mw].shape, V2[mh,mw].shape)
-            M[:, :, :, mh, mw] = np.tensordot(U[mh,mw], V2[mh,mw], 1)
+            M[:, :, :, mh, mw] = np.tensordot(U[mh,mw], V[n,mh,mw], 1)
             # res = np.tensordot(U2[mh,mw], V2[mh,mw], 1)
             #print('res.shape', res.shape)
             # M[:, :, :, mh, mw] = res
@@ -402,9 +412,11 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     Ofull = O
 
     U = calcU(q=q, W=W)
+    V = calcV(I=I)
+
     for n in range(N):
         print('n', n)
-        process_one(iH=iH, iW=iW, Ci=Ci, Co=Co, kH=kH, kW=kW, n=n, I=I, U=U, O=O)
+        process_one(iH=iH, iW=iW, Ci=Ci, Co=Co, kH=kH, kW=kW, n=n, I=I, U=U, V=V, O=O)
 
     I = Ifull
     W = Wfull
