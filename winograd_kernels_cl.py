@@ -47,17 +47,17 @@ kernel void fprop_filter_trans_4x4(
 
     float I[3][3];
 
-    I[0][0] = valid_k ? (*(In + f_r0s0)) : 0.0f;
-    I[0][1] = valid_k ? (*(In + f_r0s1)) : 0.0f;
-    I[0][2] = valid_k ? (*(In + f_r0s2)) : 0.0f;
+    I[0][0] = valid_k ? (In[f_r0s0]) : 0.0f;
+    I[0][1] = valid_k ? (In[f_r0s1]) : 0.0f;
+    I[0][2] = valid_k ? (In[f_r0s2]) : 0.0f;
 
-    I[1][0] = valid_k ? (*(In + f_r1s0)) : 0.0f;
-    I[1][1] = valid_k ? (*(In + f_r1s1)) : 0.0f;
-    I[1][2] = valid_k ? (*(In + f_r1s2)) : 0.0f;
+    I[1][0] = valid_k ? (In[f_r1s0]) : 0.0f;
+    I[1][1] = valid_k ? (In[f_r1s1]) : 0.0f;
+    I[1][2] = valid_k ? (In[f_r1s2]) : 0.0f;
 
-    I[2][0] = valid_k ? (*(In + f_r2s0)) : 0.0f;
-    I[2][1] = valid_k ? (*(In + f_r2s1)) : 0.0f;
-    I[2][2] = valid_k ? (*(In + f_r2s2)) : 0.0f;
+    I[2][0] = valid_k ? (In[f_r2s0]) : 0.0f;
+    I[2][1] = valid_k ? (In[f_r2s1]) : 0.0f;
+    I[2][2] = valid_k ? (In[f_r2s2]) : 0.0f;
 
 
     float rcp4  = 1.0f/4.0f;

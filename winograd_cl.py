@@ -363,8 +363,8 @@ def calcU(q, W):
     # X2    = gridX  * 2
     GK   = ceil_div(Co, 32)
 
-    dtype_itemsize = 4
-    filter_size   = dtype_itemsize*1152*Ci*GK
+    # dtype_itemsize = 4
+    filter_size   = 1152*Ci*GK
     # trans_shared = 512 * dtype_itemsize
     grid = (GK, Ci, 1)
     block = (32, 1, 1)
@@ -385,8 +385,9 @@ def calcU(q, W):
         kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152)
     # q.finish()
     cl.enqueue_copy(q, U_from_cl, U_cl)
-    U_from_cl = U_from_cl[:6*6*Co*Ci].reshape(6,6,Co,Ci)
-    print('U_from_cl', U_from_cl)
+    print('GK', GK, 'Ci', Ci, 'filter_size', filter_size, 'U_from_cl.size', U_from_cl.size)
+    U_from_cl = U_from_cl.reshape(GK*32,Ci,6,6) # [:Co,:Ci,:,:]
+    print('U_from_cl[0][0]', U_from_cl[0,0])
     return U2
 
 def process(iH, iW, N, Ci, Co, kH=3, kW=3):
