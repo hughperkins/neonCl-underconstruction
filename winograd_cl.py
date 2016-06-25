@@ -332,62 +332,46 @@ def calcU(q, W):
             #    for j in range(6):
             #        U2[i, j, co, ci] = U[i, j]
     timecheck('calced U2')
-    print('U from python', U2)
-    W = Wfull
+    #print('U from python', U2)
+    print('U[:,:,0,0] from python', U2[:,:,0,0])
+    print('U[:,:,1,0] from python', U2[:,:,1,0])
+    print('U[:,:,16,0] from python', U2[:,:,16,0])
+    print('U[:,:,32,0] from python', U2[:,:,32,0])
+    print('U[:,:,0,1] from python', U2[:,:,0,1])
+    #print('U[:,:,0,2] from python', U2[:,:,0,2])
+    print('U[:,:,16,1] from python', U2[:,:,16,1])
 
+    print('U[:,:,32,1] from python', U2[:,:,32,1])
+    W = Wfull
     # return U2
 
     # this is adapted from neon's winograd_conv.py:
-    #if N == 1:
-    #    shiftN = 0
-    #elif N < 32:
-    #    shiftN = len(bin(N-1))-2
-    #else:
-    #    shiftN = 5
-    #blkN = 1 << shiftN
-
-    #shiftY, shiftX, superY, superX = {
-    #    1 : (3,4,0x203,0x300), # 4x8
-    #    2 : (3,3,0x203,0x201), # 4x4
-    #    4 : (2,3,0x104,0x202), # 2x4
-    #    8 : (2,2,0x104,0x103), # 2x2
-    #    16: (1,2,0x000,0x104), # 1x2
-    #    32: (1,1,0x000,0x000), # 1x1
-    #}.get(blkN)
-
-    # gridCo = ceil_div(Co, 32)
-    # gridY = ceil_div(oH, 1<<shiftY)
-    # gridX = ceil_div(oY, 1<<shiftX)
-    # gridN = ceil_div(N, blkN)
-    # Y2    = gridY // 2
-    # X2    = gridX  * 2
     GK   = ceil_div(Co, 32)
 
-    # dtype_itemsize = 4
     filter_size   = 1152*Ci*GK
-    # trans_shared = 512 * dtype_itemsize
     grid = (GK, Ci, 1)
     block = (32, 1, 1)
-    #trans_args   = [(gridCo, Ci, 1), (32, 1, 1), None,
-    #                 None, None, kH*kW*Co, kW*Co, kW*Co*2, Co]
     W_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=W)
-    # U_from_cl = np.zeros((6, 6, Co, Ci), dtype=np.float32)
     U_from_cl = np.zeros((filter_size,), dtype=np.float32)
     print('size U_from_cl', U_from_cl.size)
     U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U_from_cl)
     
-    #fprop_filter_trans_kernel(
-    #print('trans_shared', trans_shared, 'grid', grid, 'block', block, 'W.shape', W.shape)
     call_cl_kernel(
         fprop_filter_trans_4x4_kernel,
         q, grid, block,
         U_cl, W_cl,
         kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152)
-    # q.finish()
     cl.enqueue_copy(q, U_from_cl, U_cl)
     print('GK', GK, 'Ci', Ci, 'filter_size', filter_size, 'U_from_cl.size', U_from_cl.size)
-    U_from_cl = U_from_cl.reshape(GK*32,Ci,6,6) # [:Co,:Ci,:,:]
-    print('U_from_cl[0][0]', U_from_cl[0,0])
+    U_from_cl = U_from_cl.reshape(Ci*GK,6,6,32)#[:Co,:,:,0]
+    #print('U_from_cl', U_from_cl)
+    print('U_from_cl[0,:,:,0]', U_from_cl[0,:,:,0])
+    print('U_from_cl[0,:,:,1]', U_from_cl[0,:,:,1])
+    print('U_from_cl[0,:,:,16]', U_from_cl[0,:,:,16])
+    print('U_from_cl[2,:,:,0]', U_from_cl[2,:,:,0])
+    print('U_from_cl[1,:,:,0]', U_from_cl[1,:,:,0])
+
+    print('U_from_cl[3,:,:,0]', U_from_cl[3,:,:,0])
     return U2
 
 def process(iH, iW, N, Ci, Co, kH=3, kW=3):
@@ -422,8 +406,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 def simple1():
     image_size = 16
     N = 4
-    Ci = 1
-    Co = 1
+    Ci = 2
+    Co = 33
  
     start = time.time()
     for it in range(5):

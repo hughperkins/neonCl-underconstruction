@@ -25,6 +25,9 @@ kernel void fprop_filter_trans_4x4(
     int RSK, int SK, int SK2, int K, int C1152)
 {
     int tid  = get_local_id(0);
+    //if(tid != 0) {
+    //  return;
+    //}
     int blkK = get_num_groups(0) - get_group_id(0) - 1;
     int c    = get_num_groups(1) - get_group_id(1) - 1;
     int k    = (blkK<<5) + tid;
