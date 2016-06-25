@@ -155,12 +155,23 @@ def checkO(O, W, I, c, h, w, n, eps=1e-4):
     # assert diff < eps
     return cpu_value
 
+last = 0
+def inittime():
+    global last
+    last = time.time()
+
+def timecheck(label):
+    global last
+    now = time.time()
+    print(label, '%.2f' % ((now - last) * 1000))
+    last = now
+
 def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
     oH = iH
     oW = iW
 
     tiles = iW // 4
-
+    inittime()
     BT = np.array([[4,0,-5,0,1,0],
           [0,-4,-4,1,1,0],
           [0,4,-4,-1,1,0],
@@ -183,36 +194,39 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
     Ifull = I
     Wfull = W
     Ofull = O
-
+    timecheck('allocated BT G AT')
     U2 = np.zeros((6, 6, Co, Ci), dtype=np.float32)
+    Utmp = np.zeros((6, 3), dtype=np.float32)
+    U = np.zeros((6, 6), dtype=np.float32)  # transformed filter
+    timecheck('allocaed U')
     for co in range(Co):
         for ci in range(Ci):
-            Wall = W
-            W = W[ci,:,:,co].reshape(3,3)
-            Utmp = np.zeros((6, 3), dtype=np.float32)
-            for i in range(3):
-                Utmp[0][i] = 1/4 * W[0][i]
-                Utmp[1][i] = - 1/6 * (W[0][i] + W[1][i] + W[2][i])
-                Utmp[2][i] = - 1/6 *W[0][i] + 1/6 * W[1][i] - 1/6 * W[2][i]
-                Utmp[3][i] = 1/24 * W[0][i] + 1/12 * W[1][i] + 1/6 * W[2][i]
-                Utmp[4][i] = 1/24 * W[0][i] - 1/12 * W[1][i] + 1/6 * W[2][i]
-                Utmp[5][i] = W[2][i]
+            W = Wfull[ci,:,:,co].reshape(3,3)
+            #for i in range(3):
+                #Utmp[0][i] = 1/4 * W[0][i]
+                #Utmp[1][i] = - 1/6 * (W[0][i] + W[1][i] + W[2][i])
+                #Utmp[2][i] = - 1/6 *W[0][i] + 1/6 * W[1][i] - 1/6 * W[2][i]
+                #Utmp[3][i] = 1/24 * W[0][i] + 1/12 * W[1][i] + 1/6 * W[2][i]
+                #Utmp[4][i] = 1/24 * W[0][i] - 1/12 * W[1][i] + 1/6 * W[2][i]
+                #Utmp[5][i] = W[2][i]
+            Utmp = G.dot(W)
 
-            U = np.zeros((6, 6), dtype=np.float32)  # transformed filter
-            for i in range(6):
-                U[i][0] = 1/4 * Utmp[i][0]
-                U[i][1] = - 1/6 * Utmp[i][0] - 1/6 * Utmp[i][1] - 1/6 * Utmp[i][2]
-                U[i][2] = - 1/6 * Utmp[i][0] + 1/ 6 * Utmp[i][1] - 1 / 6 * Utmp[i][2]
-                U[i][3] = 1/24 * Utmp[i][0] + 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
-                U[i][4] = 1/24 * Utmp[i][0] - 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
-                U[i][5] = Utmp[i][2]
-            W = Wall
+            #for i in range(6):
+                #U[i][0] = 1/4 * Utmp[i][0]
+                #U[i][1] = - 1/6 * Utmp[i][0] - 1/6 * Utmp[i][1] - 1/6 * Utmp[i][2]
+                #U[i][2] = - 1/6 * Utmp[i][0] + 1/ 6 * Utmp[i][1] - 1 / 6 * Utmp[i][2]
+                #U[i][3] = 1/24 * Utmp[i][0] + 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
+                #U[i][4] = 1/24 * Utmp[i][0] - 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
+                #U[i][5] = Utmp[i][2]
+            U = Utmp.dot(G.T)
 
-            for i in range(6):
-                for j in range(6):
-                    U2[i, j, co, ci] = U[i, j]
-
+            U2[:,:,co,ci] = U
+            #for i in range(6):
+            #    for j in range(6):
+            #        U2[i, j, co, ci] = U[i, j]
+    timecheck('calced U2')
     V2 = np.zeros((6, 6, Ci, tiles, tiles), dtype=np.float32)
+    timecheck('allocaed V2')
     for th in range(tiles):
         for tw in range(tiles):
             for ci in range(Ci):
@@ -232,52 +246,65 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
                 Ipadded[hstartoffset:hendoffset + 1,wstartoffset:wendoffset + 1] = Ifull[ci,hstarttrunc:hendtrunc+1,wstarttrunc:wendtrunc+1,n]
                 I = Ipadded
                 Vtmp = np.zeros((6,6), dtype=np.float32)
-                for i in range(6):
-                    Vtmp[0][i] = + 4 * I[0][i] - 5 * I[2][i]               + I[4][i]
-                    Vtmp[1][i] = - 4 * I[1][i] - 4 * I[2][i] +     I[3][i] + I[4][i]
-                    Vtmp[2][i] = + 4 * I[1][i] - 4 * I[2][i] -     I[3][i] + I[4][i]
-                    Vtmp[3][i] = - 2 * I[1][i] -     I[2][i] + 2 * I[3][i] + I[4][i]
-                    Vtmp[4][i] = + 2 * I[1][i] -     I[2][i] - 2 * I[3][i] + I[4][i]
-                    Vtmp[5][i] = + 4 * I[1][i]               - 5 * I[3][i]           + I[5][i]
+                #for i in range(6):
+                    #Vtmp[0][i] = + 4 * I[0][i] - 5 * I[2][i]               + I[4][i]
+                    #Vtmp[1][i] = - 4 * I[1][i] - 4 * I[2][i] +     I[3][i] + I[4][i]
+                    #Vtmp[2][i] = + 4 * I[1][i] - 4 * I[2][i] -     I[3][i] + I[4][i]
+                    #Vtmp[3][i] = - 2 * I[1][i] -     I[2][i] + 2 * I[3][i] + I[4][i]
+                    #Vtmp[4][i] = + 2 * I[1][i] -     I[2][i] - 2 * I[3][i] + I[4][i]
+                    #Vtmp[5][i] = + 4 * I[1][i]               - 5 * I[3][i]           + I[5][i]
+                Vtmp = BT.dot(I)
 
                 V = np.zeros((6, 6), dtype=np.float32) # transformed image
                 # each i is a row of V
-                for i in range(6):
-                    V[i][0] = + 4 * Vtmp[i][0] - 5 * Vtmp[i][2]           + Vtmp[i][4]
-                    V[i][1] = - 4 * Vtmp[i][1] - 4 * Vtmp[i][2] +     Vtmp[i][3] + Vtmp[i][4]
-                    V[i][2] = + 4 * Vtmp[i][1] - 4 * Vtmp[i][2] -     Vtmp[i][3] + Vtmp[i][4]
-                    V[i][3] = - 2 * Vtmp[i][1] -     Vtmp[i][2] + 2 * Vtmp[i][3] + Vtmp[i][4]
-                    V[i][4] = + 2 * Vtmp[i][1] -     Vtmp[i][2] - 2 * Vtmp[i][3] + Vtmp[i][4]
-                    V[i][5] = + 4 * Vtmp[i][1]               - 5 * Vtmp[i][3]           + Vtmp[i][5]
-                
-                for i in range(6):
-                    for j in range(6):
-                        V2[i, j, ci, th, tw] = V[i, j]
+                #for i in range(6):
+                    #V[i][0] = + 4 * Vtmp[i][0] - 5 * Vtmp[i][2]           + Vtmp[i][4]
+                    #V[i][1] = - 4 * Vtmp[i][1] - 4 * Vtmp[i][2] +     Vtmp[i][3] + Vtmp[i][4]
+                    #V[i][2] = + 4 * Vtmp[i][1] - 4 * Vtmp[i][2] -     Vtmp[i][3] + Vtmp[i][4]
+                    #V[i][3] = - 2 * Vtmp[i][1] -     Vtmp[i][2] + 2 * Vtmp[i][3] + Vtmp[i][4]
+                    #V[i][4] = + 2 * Vtmp[i][1] -     Vtmp[i][2] - 2 * Vtmp[i][3] + Vtmp[i][4]
+                    #V[i][5] = + 4 * Vtmp[i][1]               - 5 * Vtmp[i][3]           + Vtmp[i][5]
+                V = Vtmp.dot(BT.T)
+                V2[:,:,ci,th,tw] = V
+#                for i in range(6):
+ #                   for j in range(6):
+  #                      V2[i, j, ci, th, tw] = V[i, j]
+    timecheck('calced V2')
 
-    M = np.zeros((Co, tiles, tiles, oH + 2, oW + 2), dtype=np.float32)
+    M = np.zeros((Co, tiles, tiles, 6, 6), dtype=np.float32)
     for mh in range(6):
         for mw in range(6):
+            #print('U2[mh,mw].shape', U2[mh,mw].shape, V2[mh,mw].shape)
             M[:, :, :, mh, mw] = np.tensordot(U2[mh,mw], V2[mh,mw], 1)
-    
+            # res = np.tensordot(U2[mh,mw], V2[mh,mw], 1)
+            #print('res.shape', res.shape)
+            # M[:, :, :, mh, mw] = res
+    timecheck('calced M')
+
     Mfull = M
     # inverse transform
+    Otmp = np.zeros((4, 6), dtype=np.float32)
     for co in range(Co):
         for th in range(tiles):
             for tw in range(tiles):
                 O = Ofull[co,th * 4:(th+1)*4,tw*4:(tw+1)*4,n].reshape(4,4)
                 M = Mfull[co, th, tw]
-                Otmp = np.zeros((4, 6), dtype=np.float32)
-                for i in range(6):
-                    Otmp[0][i] = M[0][i] + M[1][i] + M[2][i] + M[3][i] + M[4][i]
-                    Otmp[1][i] =         + M[1][i] - M[2][i] + 2 * M[3][i] - 2 * M[4][i]
-                    Otmp[2][i] =         + M[1][i] + M[2][i] + 4 * M[3][i] + 4 * M[4][i]
-                    Otmp[3][i] =         + M[1][i] - M[2][i] + 8 * M[3][i] - 8 * M[4][i] + M[5][i]
+                #for i in range(6):
+                    #Otmp[0][i] = M[0][i] + M[1][i] + M[2][i] + M[3][i] + M[4][i]
+                    #Otmp[1][i] =         + M[1][i] - M[2][i] + 2 * M[3][i] - 2 * M[4][i]
+                    #Otmp[2][i] =         + M[1][i] + M[2][i] + 4 * M[3][i] + 4 * M[4][i]
+                    #Otmp[3][i] =         + M[1][i] - M[2][i] + 8 * M[3][i] - 8 * M[4][i] + M[5][i]
+                    #print('AT.shape', AT.shape, 'M.shape', M.shape)
+                Otmp = AT.dot(M)
 
-                for i in range(4):
-                    O[i][0] = Otmp[i][0] + Otmp[i][1] + Otmp[i][2] + Otmp[i][3] + Otmp[i][4]
-                    O[i][1] =         + Otmp[i][1] - Otmp[i][2] + 2 * Otmp[i][3] - 2 * Otmp[i][4]
-                    O[i][2] =         + Otmp[i][1] + Otmp[i][2] + 4 * Otmp[i][3] + 4 * Otmp[i][4]
-                    O[i][3] =         + Otmp[i][1] - Otmp[i][2] + 8 * Otmp[i][3] - 8 * Otmp[i][4] + Otmp[i][5]
+                #for i in range(4):
+                    #O[i][0] = Otmp[i][0] + Otmp[i][1] + Otmp[i][2] + Otmp[i][3] + Otmp[i][4]
+                    #O[i][1] =         + Otmp[i][1] - Otmp[i][2] + 2 * Otmp[i][3] - 2 * Otmp[i][4]
+                    #O[i][2] =         + Otmp[i][1] + Otmp[i][2] + 4 * Otmp[i][3] + 4 * Otmp[i][4]
+                    #O[i][3] =         + Otmp[i][1] - Otmp[i][2] + 8 * Otmp[i][3] - 8 * Otmp[i][4] + Otmp[i][5]
+                    #print('O.shape', O.shape, 'Otmp.shape', Otmp.shape, 'AT.T.shape', AT.T.shape)
+                O[:] = Otmp.dot(AT.T)
+    timecheck('calced O')
 
 def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     np.random.seed(123)
@@ -308,12 +335,13 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 def simple1():
     image_size = 8
     N = 4
-    Ci = 4
-    Co = 4
+    Ci = 16
+    Co = 16
  
     start = time.time()
-    res = process(iH=image_size, iW=image_size, N=N, Ci=Ci,
-        Co=Co)
+    for it in range(10):
+        res = process(iH=image_size, iW=image_size, N=N, Ci=Ci,
+            Co=Co)
     end = time.time()
     print('diff', end - start)
     np.set_printoptions(precision=2, suppress=True)
