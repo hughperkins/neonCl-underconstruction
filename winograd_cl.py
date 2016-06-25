@@ -333,13 +333,13 @@ def calcU(q, W):
             #        U2[i, j, co, ci] = U[i, j]
     timecheck('calced U2')
     #print('U from python', U2)
-    print('U[:,:,0,0] from python', U2[:,:,0,0])
-    print('U[:,:,1,0] from python', U2[:,:,1,0])
-    print('U[:,:,16,0] from python', U2[:,:,16,0])
-    print('U[:,:,32,0] from python', U2[:,:,32,0])
-    print('U[:,:,0,1] from python', U2[:,:,0,1])
+    #print('U[:,:,0,0] from python', U2[:,:,0,0])
+    #print('U[:,:,1,0] from python', U2[:,:,1,0])
+    #print('U[:,:,16,0] from python', U2[:,:,16,0])
+    #print('U[:,:,32,0] from python', U2[:,:,32,0])
+    #print('U[:,:,0,1] from python', U2[:,:,0,1])
     #print('U[:,:,0,2] from python', U2[:,:,0,2])
-    print('U[:,:,16,1] from python', U2[:,:,16,1])
+    #print('U[:,:,16,1] from python', U2[:,:,16,1])
 
     print('U[:,:,32,1] from python', U2[:,:,32,1])
     W = Wfull
@@ -362,16 +362,19 @@ def calcU(q, W):
         U_cl, W_cl,
         kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152)
     cl.enqueue_copy(q, U_from_cl, U_cl)
-    print('GK', GK, 'Ci', Ci, 'filter_size', filter_size, 'U_from_cl.size', U_from_cl.size)
-    U_from_cl = U_from_cl.reshape(Ci*GK,6,6,32)#[:Co,:,:,0]
+    #print('GK', GK, 'Ci', Ci, 'filter_size', filter_size, 'U_from_cl.size', U_from_cl.size)
+    U_from_cl = U_from_cl.reshape(GK,Ci,6,6,32)#[:Co,:,:,0]
     #print('U_from_cl', U_from_cl)
-    print('U_from_cl[0,:,:,0]', U_from_cl[0,:,:,0])
-    print('U_from_cl[0,:,:,1]', U_from_cl[0,:,:,1])
-    print('U_from_cl[0,:,:,16]', U_from_cl[0,:,:,16])
-    print('U_from_cl[2,:,:,0]', U_from_cl[2,:,:,0])
-    print('U_from_cl[1,:,:,0]', U_from_cl[1,:,:,0])
-
-    print('U_from_cl[3,:,:,0]', U_from_cl[3,:,:,0])
+    #print('U_from_cl[0,0,:,:,0]', U_from_cl[0,0,:,:,0])
+    #print('U_from_cl[0,0,:,:,1]', U_from_cl[0,0,:,:,1])
+    #print('U_from_cl[0,0,:,:,16]', U_from_cl[0,0,:,:,16])
+    #print('U_from_cl[1,0,:,:,0]', U_from_cl[1,0,:,:,0])
+    #print('U_from_cl[0,1,:,:,0]', U_from_cl[0,1,:,:,0])
+    #print('U_from_cl[0,1,:,:,16]', U_from_cl[0,1,:,:,16])
+    #print('U_from_cl[1,1,:,:,0]', U_from_cl[1,1,:,:,0])
+    U_from_cl = np.transpose(U_from_cl, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
+    print('U_from_cl[:,:,32,1]', U_from_cl[:,:,32,1])
+    assert np.allclose(U_from_cl, U2, atol=1e-4)
     return U2
 
 def process(iH, iW, N, Ci, Co, kH=3, kW=3):
