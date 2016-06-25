@@ -179,7 +179,7 @@ def inittime():
 def timecheck(label):
     global last
     now = time.time()
-    print(label, '%.2f' % ((now - last) * 1000))
+    print(label, '%.2f ms' % ((now - last) * 1000))
     last = now
 
 def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, O):
@@ -292,7 +292,7 @@ def calcU(q, W):
     kW = W.shape[2]
     Co = W.shape[3]
 
-    if False:
+    if True:
         G = np.array([[1/4,0,0],
             [-1/6,-1/6,-1/6],
             [-1/6,1/6,-1/6],
@@ -342,7 +342,7 @@ def calcU(q, W):
         #print('U[:,:,0,2] from python', U2[:,:,0,2])
         #print('U[:,:,16,1] from python', U2[:,:,16,1])
 
-        print('U[:,:,32,1] from python', U2[:,:,32,1])
+        #print('U[:,:,32,1] from python', U2[:,:,32,1])
         W = Wfull
         # return U2
 
@@ -356,12 +356,16 @@ def calcU(q, W):
     U_from_cl = np.zeros((filter_size,), dtype=np.float32)
     print('size U_from_cl', U_from_cl.size)
     U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U_from_cl)
+    q.finish()
+    timecheck('created U_cl buffers')
     
     call_cl_kernel(
         fprop_filter_trans_4x4_kernel,
         q, grid, block,
         U_cl, W_cl,
         kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152)
+    q.finish()
+    timecheck('calced U_cl')
     cl.enqueue_copy(q, U_from_cl, U_cl)
     #print('GK', GK, 'Ci', Ci, 'filter_size', filter_size, 'U_from_cl.size', U_from_cl.size)
     U_from_cl = U_from_cl.reshape(GK,Ci,6,6,32)#[:Co,:,:,0]
@@ -374,8 +378,8 @@ def calcU(q, W):
     #print('U_from_cl[0,1,:,:,16]', U_from_cl[0,1,:,:,16])
     #print('U_from_cl[1,1,:,:,0]', U_from_cl[1,1,:,:,0])
     U_from_cl = np.transpose(U_from_cl, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
-    print('U_from_cl[:,:,32,1]', U_from_cl[:,:,32,1])
-    #assert np.allclose(U_from_cl, U2, atol=1e-4)
+    #print('U_from_cl[:,:,32,1]', U_from_cl[:,:,32,1])
+    assert np.allclose(U_from_cl, U2, atol=1e-4)
     return U_from_cl
 
 def process(iH, iW, N, Ci, Co, kH=3, kW=3):
@@ -410,8 +414,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 def simple1():
     image_size = 16
     N = 4
-    Ci = 2
-    Co = 33
+    Ci = 32
+    Co = 32
  
     start = time.time()
     for it in range(5):
@@ -441,7 +445,7 @@ def simple1():
         #print(O[co,:,:,n].reshape(image_size, image_size))
         #print('cpu')
         #print(cpuO[co,:,:,n].reshape(image_size,image_size))
-        assert np.allclose(O[co,:,:,n], cpuO[co,:,:,n], atol=1e-4)
+        assert np.allclose(O[co,:,:,n], cpuO[co,:,:,n], atol=1e-3)
     #printTensor(cpuO[0])
 
     print('diff', end - start)
