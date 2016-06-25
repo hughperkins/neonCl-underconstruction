@@ -101,7 +101,7 @@ def calcU(q, W):
     cl.enqueue_copy(q, U_from_cl, U_cl)
     #print('GK', GK, 'Ci', Ci, 'filter_size', filter_size, 'U_from_cl.size', U_from_cl.size)
     U_from_cl = U_from_cl.reshape(GK,Ci,6,6,32)#[:Co,:,:,0]
-    U_from_cl = np.transpose(U_from_cl, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
+    #U_from_cl = np.transpose(U_from_cl, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
     # assert np.allclose(U_from_cl, U2, atol=1e-4)
     return U_from_cl
 
@@ -171,14 +171,46 @@ def calcV(I):
     print('GXS', GXS, 'GYS', GYS, 'GN', GN, 'Ci', Ci)
     V_from_cl = V_from_cl.reshape(GYS,GXS,GN,Ci,6,6,32)
 
-    V_from_cl = np.transpose(V_from_cl, [2, 6, 4, 5, 3, 0, 1])
-    V_from_cl = V_from_cl.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
+    #V_from_cl = np.transpose(V_from_cl, [2, 6, 4, 5, 3, 0, 1])
+    #V_from_cl = V_from_cl.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
 
     # assert np.allclose(V_from_cl, V2, atol=1e-4)
 
     return V_from_cl
 
-def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, V, O):
+def calcM(N, Co, U, V):
+    U_from_cl = U
+    V_from_cl = V
+
+    # U_from_cl.reshape(GK,Ci,6,6,32)
+    GK   = U.shape[0]
+    Ci = U.shape[1]
+    tiles = V.shape[0]
+    GN = V.shape[2]
+
+    U = np.transpose(U, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
+
+    V = np.transpose(V, [2, 6, 4, 5, 3, 0, 1])
+    V = V.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
+
+    # tiles = iW // 4
+    M = np.zeros((N, Co, tiles, tiles, 6, 6), dtype=np.float32)
+    for n in range(N):
+        for mh in range(6):
+            for mw in range(6):
+                #print('U2[mh,mw].shape', U2[mh,mw].shape, V2[mh,mw].shape)
+                M[n,:, :, :, mh, mw] = np.tensordot(U[mh,mw], V[n,mh,mw], 1)
+                # res = np.tensordot(U2[mh,mw], V2[mh,mw], 1)
+                #print('res.shape', res.shape)
+                # M[:, :, :, mh, mw] = res
+    timecheck('calced M')
+    
+    U = U_from_cl
+    V = V_from_cl
+
+    return M
+
+def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, V, M, O):
     oH = iH
     oW = iW
 
@@ -193,17 +225,17 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, V, O):
     Ofull = O
     timecheck('allocated AT')
 
-    M = np.zeros((Co, tiles, tiles, 6, 6), dtype=np.float32)
-    for mh in range(6):
-        for mw in range(6):
-            #print('U2[mh,mw].shape', U2[mh,mw].shape, V2[mh,mw].shape)
-            M[:, :, :, mh, mw] = np.tensordot(U[mh,mw], V[n,mh,mw], 1)
-            # res = np.tensordot(U2[mh,mw], V2[mh,mw], 1)
-            #print('res.shape', res.shape)
-            # M[:, :, :, mh, mw] = res
-    timecheck('calced M')
+    #M = np.zeros((Co, tiles, tiles, 6, 6), dtype=np.float32)
+    #for mh in range(6):
+    #    for mw in range(6):
+    #        #print('U2[mh,mw].shape', U2[mh,mw].shape, V2[mh,mw].shape)
+    #       M[:, :, :, mh, mw] = np.tensordot(U[mh,mw], V[n,mh,mw], 1)
+    #        # res = np.tensordot(U2[mh,mw], V2[mh,mw], 1)
+    #        #print('res.shape', res.shape)
+    ##        # M[:, :, :, mh, mw] = res
+    #timecheck('calced M')
 
-    Mfull = M
+    Mfull = M[n]
     # inverse transform
     Otmp = np.zeros((4, 6), dtype=np.float32)
     for co in range(Co):
@@ -249,10 +281,11 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 
     U = calcU(q=q, W=W)
     V = calcV(I=I)
+    M = calcM(N=N, Co=Co, U=U, V=V)
 
     for n in range(N):
         print('n', n)
-        process_one(iH=iH, iW=iW, Ci=Ci, Co=Co, kH=kH, kW=kW, n=n, I=I, U=U, V=V, O=O)
+        process_one(iH=iH, iW=iW, Ci=Ci, Co=Co, kH=kH, kW=kW, n=n, I=I, U=U, V=V, M=M, O=O)
 
     I = Ifull
     W = Wfull
