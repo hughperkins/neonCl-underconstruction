@@ -333,6 +333,8 @@ def calcU(q, W):
             #        U2[i, j, co, ci] = U[i, j]
     timecheck('calced U2')
     print('U from python', U2)
+    W = Wfull
+
     # return U2
 
     # this is adapted from neon's winograd_conv.py:
@@ -365,21 +367,24 @@ def calcU(q, W):
     trans_shared = 512 * dtype_itemsize
     grid = (gridCo, Ci, 1)
     block = (32, 1, 1)
-    trans_args   = [(gridCo, Ci, 1), (32, 1, 1), None,
-                     None, None, kH*kW*Co, kW*Co, kW*Co*2, Co]
+    #trans_args   = [(gridCo, Ci, 1), (32, 1, 1), None,
+    #                 None, None, kH*kW*Co, kW*Co, kW*Co*2, Co]
     W_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=W)
-    U_from_cl = np.zeros((6, 6, Co, Ci), dtype=np.float32)
+    # U_from_cl = np.zeros((6, 6, Co, Ci), dtype=np.float32)
+    U_from_cl = np.zeros((trans_size,), dtype=np.float32)
+    print('size U_from_cl', U_from_cl.size)
     U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U_from_cl)
     
     #fprop_filter_trans_kernel(
+    print('trans_shared', trans_shared, 'grid', grid, 'block', block, 'W.shape', W.shape)
     call_cl_kernel(
         fprop_filter_trans_kernel,
         q, grid, block,
-        U_cl, W_cl, kH * kW * Co, kW * Co, kW * Co * 2,
-        Co,
+        U_cl, W_cl, kH * kW * Co, kW * Co, kW * Co * 2, Co,
         cl.LocalMemory(trans_shared))
-
+    # q.finish()
     cl.enqueue_copy(q, U_from_cl, U_cl)
+    U_from_cl = U_from_cl[:6*6*Co*Ci].reshape(6,6,Co,Ci)
     print('U_from_cl', U_from_cl)
     return U2
 

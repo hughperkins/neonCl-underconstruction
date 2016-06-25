@@ -22,10 +22,10 @@ def get_fprop_filter_trans_kernel(ctx):
 
     code = r"""
 kernel void fprop_filter_trans(global float4* T, global const float* F, int RSK, int SK, int SK2, int K,
-    local float *share)
+    local float4 *share4)
 {
 
-    local float4 *share4 = (local float4 *)share;
+    local float *share = (local float *)share4;
 
     int tid  = get_local_id(0);
     int blkK = get_group_id(0);
