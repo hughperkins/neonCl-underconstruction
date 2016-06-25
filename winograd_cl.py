@@ -42,6 +42,7 @@ q = cl.CommandQueue(ctx)
 mf = cl.mem_flags
 
 fprop_filter_trans_4x4_kernel = winograd_kernels_cl.get_fprop_filter_trans_4x4_kernel(ctx)
+xprop_image_trans_4x4_kernel = winograd_kernels_cl.get_xprop_image_trans_4x4_kernel(ctx)
 
 its = 1
 
@@ -286,6 +287,11 @@ def calcV(I):
     N = I.shape[3]
     tiles = iW // 4
 
+    oH = iH
+    oW = iW
+    padH = 1
+    padW = 1
+
     BT = np.array([[4,0,-5,0,1,0],
           [0,-4,-4,1,1,0],
           [0,4,-4,-1,1,0],
@@ -340,6 +346,58 @@ def calcV(I):
      #                   for j in range(6):
       #                      V2[i, j, ci, th, tw] = V[i, j]
         timecheck('calced V2')
+    I = Ifull
+
+    # adapted from winograd_conv.py
+    if N == 1:
+        shlN = 0
+    elif N < 32:
+        shlN = len(bin(N-1))-2
+    else:
+        shlN = 5
+
+    shlY, shlX, maskY, shrY, maskX, shrX, maskN, supY, supX = {
+        0 : (4, 5, 0x18, 3, 0x07, 0, 0x00, 0x203, 0x300), # 4x8  yyxxx
+        1 : (4, 4, 0x18, 3, 0x06, 1, 0x01, 0x203, 0x201), # 4x4  yyxxn
+        2 : (3, 4, 0x10, 4, 0x0c, 2, 0x03, 0x104, 0x202), # 2x4  yxxnn
+        3 : (2, 4, 0x00, 0, 0x18, 3, 0x07, 0x000, 0x203), # 1x4  xxnnn
+        4 : (2, 3, 0x00, 0, 0x10, 4, 0x0f, 0x000, 0x104), # 1x2  xnnnn
+        5 : (2, 2, 0x00, 0, 0x00, 0, 0x1f, 0x000, 0x000), # 1x1  nnnnn
+    }.get(shlN)
+
+    GYS  = ceil_div(oH, 1 << shlY)
+    GXS  = ceil_div(oW, 1 << shlX)
+    GN   = ceil_div(N, 1 << shlN)
+    # GK   = ceil_div(Co, 32)
+    GYS2 = GYS // 2
+    GXS2 = GXS  * 2
+
+    div_GXS2 = get_div_mul_shift_64(GXS2)
+
+    image_size = 1152*Ci*GXS*GYS*GN
+    V_from_cl = np.zeros((image_size,), dtype=np.float32)
+    I_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=I)
+    V_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=V_from_cl)
+    q.finish()
+    timecheck('allocated V_cl buffers')
+
+    grid = (GN, GYS*GXS, Ci)
+    block = (32, 1, 1)
+
+    call_cl_kernel(
+        xprop_image_trans_4x4_kernel,
+        q, grid, block,
+        V_cl, I_cl,
+        
+        iH, iW, N, padH, padW,
+        GXS, GYS2, GXS2, div_GXS2[0], div_GXS2[1],
+        shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
+        iH * iW * N, iW * N, GYS*GXS*Ci*1152, GXS * Ci * 1152, Ci * 1152)
+    q.finish()
+    timecheck('calced V_cl')
+
+    cl.enqueue_copy(q, V_from_cl, V_cl)
+
     return V2
 
 def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, V, O):
