@@ -349,13 +349,13 @@ def calcV(I):
     I = Ifull
 
     # adapted from winograd_conv.py
-    if N == 1:
-        shlN = 0
-    elif N < 32:
-        shlN = len(bin(N-1))-2
-    else:
-        shlN = 5
-
+    #if N == 1:
+    #    shlN = 0
+    #elif N < 32:
+    #    shlN = len(bin(N-1))-2
+    #else:
+    #    shlN = 5
+    shlN = 5
     shlY, shlX, maskY, shrY, maskX, shrX, maskN, supY, supX = {
         0 : (4, 5, 0x18, 3, 0x07, 0, 0x00, 0x203, 0x300), # 4x8  yyxxx
         1 : (4, 4, 0x18, 3, 0x06, 1, 0x01, 0x203, 0x201), # 4x4  yyxxn
@@ -397,8 +397,48 @@ def calcV(I):
     timecheck('calced V_cl')
 
     cl.enqueue_copy(q, V_from_cl, V_cl)
+    print('image_size', image_size)
+    print('GXS', GXS, 'GYS', GYS, 'GN', GN, 'Ci', Ci)
+    V_from_cl = V_from_cl.reshape(GYS,GXS,GN,Ci,6,6,32)
+    # [GYS,GXS,GN,Ci,6,6,N % 32]
+    # V2[n, :,:,ci,th,tw]
+    #print('V2[0,:,:,0,0,0]', V2[0,:,:,0,0,0])
+    #print('V_from_cl[0,0,0,0,:,:,0]', V_from_cl[0,0,0,0,:,:,0])
 
-    return V2
+    #print('V2[0,:,:,1,0,0]', V2[0,:,:,1,0,0])
+    #print('V_from_cl[0,0,0,1,:,:,0]', V_from_cl[0,0,0,1,:,:,0])  # ci=1
+
+    #print('V2[1,:,:,0,0,0]', V2[1,:,:,0,0,0])
+    #print('V_from_cl[0,0,0,0,:,:,1]', V_from_cl[0,0,0,0,:,:,1])  # n=1
+
+    #print('V2[2,:,:,0,0,0]', V2[2,:,:,0,0,0])
+    #print('V_from_cl[0,0,0,0,:,:,2]', V_from_cl[0,0,0,0,:,:,2])  # n=2
+
+    V_from_cl = np.transpose(V_from_cl, [2, 6, 4, 5, 3, 0, 1])
+    V_from_cl = V_from_cl.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
+
+    #print(V2[0,:,:,0,0,0])
+    #print(V_from_cl[0,:,:,0,0,0])
+
+    #print(V2[0,:,:,0,0,1])
+    #print(V_from_cl[0,:,:,0,0,1])
+
+    #print(V2[0,:,:,0,1,0])
+    #print(V_from_cl[0,:,:,0,1,0])
+
+    #print(V2[0,:,:,1,0,0])
+    #print(V_from_cl[0,:,:,1,0,0])
+
+    #print(V2[1,:,:,0,0,0])
+    #print(V_from_cl[1,:,:,0,0,0])
+
+    assert np.allclose(V_from_cl, V2, atol=1e-4)
+
+    #print('V2[0,:,:,0,0,1]', V2[0,:,:,0,0,1])
+    #print('V2[0,:,:,0,1,0]', V2[0,:,:,0,1,0])
+
+
+    return V_from_cl
 
 def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, V, O):
     oH = iH
