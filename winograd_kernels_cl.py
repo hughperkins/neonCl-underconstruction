@@ -17,20 +17,19 @@
 import pyopencl as cl
 
 
-def get_fprop_filter_trans_kernel(ctx):
-    print('get_fprop_filter_trans_kernel')
-
+def get_fprop_filter_trans_4x4_kernel(ctx):
+    print('get_fprop_filter_trans_4x4_kernel')
     code = r"""
-kernel void fprop_filter_trans(global float4* T, global const float* F, int RSK, int SK, int SK2, int K,
-    local float4 *share4)
+kernel void fprop_filter_trans_4x4(
+    global float* Out, global const float* In,
+    int RSK, int SK, int SK2, int K, int C1152)
 {
-
-    local float *share = (local float *)share4;
-
     int tid  = get_local_id(0);
-    int blkK = get_group_id(0);
-    int c    = get_group_id(1);
+    int blkK = get_num_groups(0) - get_group_id(0) - 1;
+    int c    = get_num_groups(1) - get_group_id(1) - 1;
     int k    = (blkK<<5) + tid;
+
+    int out_offset = blkK*C1152 + c*1152 + tid;
 
     bool valid_k = k < K;
 
@@ -38,87 +37,66 @@ kernel void fprop_filter_trans(global float4* T, global const float* F, int RSK,
     int f_r0s1 = f_r0s0 + K;
     int f_r0s2 = f_r0s1 + K;
 
-    int f_r2s0 = f_r0s0 + SK2;
-    int f_r2s1 = f_r0s1 + SK2;
-    int f_r2s2 = f_r0s2 + SK2;
-
     int f_r1s0 = f_r0s0 + SK;
     int f_r1s1 = f_r0s1 + SK;
     int f_r1s2 = f_r0s2 + SK;
 
-    float r0s0 = valid_k ? (F[f_r0s0]) : 0.0f;
-    float r0s1 = valid_k ? (F[f_r0s1]) : 0.0f;
-    float r0s2 = valid_k ? (F[f_r0s2]) : 0.0f;
+    int f_r2s0 = f_r0s0 + SK2;
+    int f_r2s1 = f_r0s1 + SK2;
+    int f_r2s2 = f_r0s2 + SK2;
 
-    float r2s0 = valid_k ? (F[f_r2s0]) : 0.0f;
-    float r2s1 = valid_k ? (F[f_r2s1]) : 0.0f;
-    float r2s2 = valid_k ? (F[f_r2s2]) : 0.0f;
+    float I[3][3];
 
-    float r1s0 = valid_k ? (F[f_r1s0]) : 0.0f;
-    float r1s1 = valid_k ? (F[f_r1s1]) : 0.0f;
-    float r1s2 = valid_k ? (F[f_r1s2]) : 0.0f;
+    I[0][0] = valid_k ? (*(In + f_r0s0)) : 0.0f;
+    I[0][1] = valid_k ? (*(In + f_r0s1)) : 0.0f;
+    I[0][2] = valid_k ? (*(In + f_r0s2)) : 0.0f;
 
-    float temp00 = r0s1 * 0.5f;
-    float temp01 = r0s0 + r0s2;
-    float F01    = fma(temp01, 0.5f,  temp00);
-    float F02    = fma(temp01, 0.5f, -temp00);
-    share[tid + 32*0] = (r0s0);
-    share[tid + 32*1] = (F01);
-    share[tid + 32*2] = (F02);
-    share[tid + 32*3] = (r0s2);
-    float temp02 = r2s0 + r2s2;
-    float temp08 = r2s1 + 0.5f;
-    float F13    = fma(temp02, 0.5f,  temp08);
-    float F14    = fma(temp02, 0.5f, -temp08);
-    share[tid + 32*12] = (r2s0);
-    share[tid + 32*13] = (F13);
-    share[tid + 32*14] = (F14);
-    share[tid + 32*15] = (r2s2);
-    float temp10 = temp01 + temp02;
-    float temp05 = r0s1 + r2s1;
-    float temp07 = r1s0 + r1s2;
-    float temp09 = r1s1 * 0.25f;
-    float temp11 = temp10 + temp05;
-    float temp14 = temp10 - temp05;
-    float temp13 = fma(temp07, 0.25f,  temp09);
-    float temp15 = fma(temp07, 0.25f, -temp09);
-    float F05    = fma(temp11, 0.25f,  temp13);
-    float F09    = fma(temp11, 0.25f, -temp13);
-    float F06    = fma(temp14, 0.25f,  temp15);
-    float F10    = fma(temp14, 0.25f, -temp15);
-    share[tid + 32* 5] = (F05);
-    share[tid + 32* 9] = (F09);
-    share[tid + 32* 6] = (F06);
-    share[tid + 32*10] = (F10);
-    float temp03 = r1s0 * 0.5f;
-    float temp06 = r0s0 + r2s0;
-    float temp04 = r1s2 * 0.5f;
-    float F04    = fma(temp06, 0.5f,  temp03);
-    float F08    = fma(temp06, 0.5f, -temp03);
-    share[tid + 32*4] = (F04);
-    share[tid + 32*8] = (F08);
-    float temp12 = r0s2 + r2s2;
-    float F07    = fma(temp12, 0.5f,  temp04);
-    float F11    = fma(temp12, 0.5f, -temp04);
-    share[tid + 32* 7] = (F07);
-    share[tid + 32*11] = (F11);
+    I[1][0] = valid_k ? (*(In + f_r1s0)) : 0.0f;
+    I[1][1] = valid_k ? (*(In + f_r1s1)) : 0.0f;
+    I[1][2] = valid_k ? (*(In + f_r1s2)) : 0.0f;
 
-    float4 batch0 = share4[tid +  0];
-    float4 batch1 = share4[tid + 32];
-    float4 batch2 = share4[tid + 64];
-    float4 batch3 = share4[tid + 96];
+    I[2][0] = valid_k ? (*(In + f_r2s0)) : 0.0f;
+    I[2][1] = valid_k ? (*(In + f_r2s1)) : 0.0f;
+    I[2][2] = valid_k ? (*(In + f_r2s2)) : 0.0f;
 
-    int offset = c*get_num_groups(0)*128 + blkK*128 + tid;
 
-    T[offset +  0] = batch0;
-    T[offset + 32] = batch1;
-    T[offset + 64] = batch2;
-    T[offset + 96] = batch3;
+    float rcp4  = 1.0f/4.0f;
+    float rcp6  = 1.0f/6.0f;
+    float rcp12 = 1.0f/12.0f;
+    float rcp24 = 1.0f/24.0f;
+    float T[6][3];
+    #pragma unroll
+    for (int i = 0; i < 3; i++)
+    {
+        float t0 = rcp6 * I[2][i];
+        float t1 = fma(I[0][i], -rcp6, -t0);
+        float t2 = fma(I[0][i], rcp24,  t0);
+        T[0][i] = rcp4 * I[0][i];
+        T[1][i] = fma(I[1][i], -rcp6,  t1);
+        T[2][i] = fma(I[1][i],  rcp6,  t1);
+        T[3][i] = fma(I[1][i],  rcp12, t2);
+        T[4][i] = fma(I[1][i], -rcp12, t2);
+        T[5][i] = I[2][i];
+    }
+    #pragma unroll
+    for (int i = 0; i < 6; i++)
+    {
+        float t0 = rcp6 * T[i][2];
+        float t1 = fma(T[i][0], -rcp6, -t0);
+        float t2 = fma(T[i][0], rcp24,  t0);
+        Out[out_offset + 32*(i*6 + 0)] = (rcp4 * T[i][0]);
+        Out[out_offset + 32*(i*6 + 1)] = (fma(T[i][1], -rcp6,  t1));
+        Out[out_offset + 32*(i*6 + 2)] = (fma(T[i][1],  rcp6,  t1));
+        Out[out_offset + 32*(i*6 + 3)] = (fma(T[i][1],  rcp12, t2));
+        Out[out_offset + 32*(i*6 + 4)] = (fma(T[i][1], -rcp12, t2));
+        Out[out_offset + 32*(i*6 + 5)] = (T[i][2]);
+    }
+
 }
 """
     with open('/tmp/out.cl', 'w') as f:
         f.write(code)
 
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
-    return module.__getattr__('fprop_filter_trans')
+    return module.__getattr__('fprop_filter_trans_4x4')
 
