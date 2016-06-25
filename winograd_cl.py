@@ -21,6 +21,7 @@ from neoncl import api
 import pyopencl as cl
 from neoncl.util.math_helper import get_div_mul_shift_32, get_div_mul_shift_64, ceil_div
 import winograd_kernels_cl
+from neoncl.backends.kernels.cl.callkernel import call_cl_kernel
 
 
 gpu_idx = 0
@@ -294,6 +295,8 @@ def calcU(q, W):
         [0,0,1]], dtype=np.float32)
 
     Ci = W.shape[0]
+    kH = W.shape[1]
+    kW = W.shape[2]
     Co = W.shape[3]
 
     Wfull = W
@@ -329,26 +332,26 @@ def calcU(q, W):
             #    for j in range(6):
             #        U2[i, j, co, ci] = U[i, j]
     timecheck('calced U2')
-    # print('U from python', U2)
-    return U2
+    print('U from python', U2)
+    # return U2
 
     # this is adapted from neon's winograd_conv.py:
-    if N == 1:
-        shiftN = 0
-    elif N < 32:
-        shiftN = len(bin(N-1))-2
-    else:
-        shiftN = 5
-    blkN = 1 << shiftN
+    #if N == 1:
+    #    shiftN = 0
+    #elif N < 32:
+    #    shiftN = len(bin(N-1))-2
+    #else:
+    #    shiftN = 5
+    #blkN = 1 << shiftN
 
-    shiftY, shiftX, superY, superX = {
-        1 : (3,4,0x203,0x300), # 4x8
-        2 : (3,3,0x203,0x201), # 4x4
-        4 : (2,3,0x104,0x202), # 2x4
-        8 : (2,2,0x104,0x103), # 2x2
-        16: (1,2,0x000,0x104), # 1x2
-        32: (1,1,0x000,0x000), # 1x1
-    }.get(blkN)
+    #shiftY, shiftX, superY, superX = {
+    #    1 : (3,4,0x203,0x300), # 4x8
+    #    2 : (3,3,0x203,0x201), # 4x4
+    #    4 : (2,3,0x104,0x202), # 2x4
+    #    8 : (2,2,0x104,0x103), # 2x2
+    #    16: (1,2,0x000,0x104), # 1x2
+    #    32: (1,1,0x000,0x000), # 1x1
+    #}.get(blkN)
 
     gridCo = ceil_div(Co, 32)
     # gridY = ceil_div(oH, 1<<shiftY)
@@ -358,16 +361,21 @@ def calcU(q, W):
     # X2    = gridX  * 2
 
     dtype_itemsize = 4
-    trans_size   = C * gridCo * 512 * dtype_itemsize
+    trans_size   = Ci * gridCo * 512 * dtype_itemsize
     trans_shared = 512 * dtype_itemsize
-    trans_args   = [(gridK, C, 1), (32, 1, 1), None,
+    grid = (gridCo, Ci, 1)
+    block = (32, 1, 1)
+    trans_args   = [(gridCo, Ci, 1), (32, 1, 1), None,
                      None, None, kH*kW*Co, kW*Co, kW*Co*2, Co]
     W_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=W)
     U_from_cl = np.zeros((6, 6, Co, Ci), dtype=np.float32)
     U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U_from_cl)
     
-    fprop_filter_trans_kernel(
-        q, U_cl, W_cl, kH * kW * Co, kW * Co, kW * Co * 2,
+    #fprop_filter_trans_kernel(
+    call_cl_kernel(
+        fprop_filter_trans_kernel,
+        q, grid, block,
+        U_cl, W_cl, kH * kW * Co, kW * Co, kW * Co * 2,
         Co,
         cl.LocalMemory(trans_shared))
 
@@ -407,8 +415,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 def simple1():
     image_size = 16
     N = 4
-    Ci = 16
-    Co = 16
+    Ci = 1
+    Co = 1
  
     start = time.time()
     for it in range(5):
@@ -416,7 +424,6 @@ def simple1():
             Co=Co)
     end = time.time()
     print('diff', end - start)
-    np.set_printoptions(precision=2, suppress=True)
     O = res['O']
     I = res['I']
     W = res['W']
@@ -451,5 +458,6 @@ def simple1():
    # checkO(W=W, I=I, O=O, c=1, h=0, w=0, n=0)
 #    checkO(W=W, I=I, O=O, c=3, h=2, w=1, n=27)
 
+np.set_printoptions(precision=2, suppress=True)
 simple1()
 

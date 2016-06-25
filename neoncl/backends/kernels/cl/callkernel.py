@@ -18,6 +18,8 @@ def call_cl_kernel(kernel, queue, grid, block, *args):
             newargs.append(np.float32(arg))
         elif isinstance(arg, cl.cffi_cl.Buffer):
             newargs.append(arg)
+        elif isinstance(arg, cl.cffi_cl.LocalMemory):
+            newargs.append(arg)
         else:
             raise Exception('type not implemented %s' % type(arg))
         i += 1
