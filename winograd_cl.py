@@ -182,6 +182,102 @@ def timecheck(label):
     print(label, '%.2f ms' % ((now - last) * 1000))
     last = now
 
+def calcU(q, W):
+    Ci = W.shape[0]
+    kH = W.shape[1]
+    kW = W.shape[2]
+    Co = W.shape[3]
+
+    if True:
+        G = np.array([[1/4,0,0],
+            [-1/6,-1/6,-1/6],
+            [-1/6,1/6,-1/6],
+            [1/24,1/12,1/6],
+            [1/24,-1/12,1/6],
+            [0,0,1]], dtype=np.float32)
+
+        Wfull = W
+
+        U2 = np.zeros((6, 6, Co, Ci), dtype=np.float32)
+        Utmp = np.zeros((6, 3), dtype=np.float32)
+        U = np.zeros((6, 6), dtype=np.float32)  # transformed filter
+        timecheck('allocaed U')
+
+        for co in range(Co):
+            for ci in range(Ci):
+                W = Wfull[ci,:,:,co].reshape(3,3)
+                #for i in range(3):
+                    #Utmp[0][i] = 1/4 * W[0][i]
+                    #Utmp[1][i] = - 1/6 * (W[0][i] + W[1][i] + W[2][i])
+                    #Utmp[2][i] = - 1/6 *W[0][i] + 1/6 * W[1][i] - 1/6 * W[2][i]
+                    #Utmp[3][i] = 1/24 * W[0][i] + 1/12 * W[1][i] + 1/6 * W[2][i]
+                    #Utmp[4][i] = 1/24 * W[0][i] - 1/12 * W[1][i] + 1/6 * W[2][i]
+                    #Utmp[5][i] = W[2][i]
+                Utmp = G.dot(W)
+
+                #for i in range(6):
+                    #U[i][0] = 1/4 * Utmp[i][0]
+                    #U[i][1] = - 1/6 * Utmp[i][0] - 1/6 * Utmp[i][1] - 1/6 * Utmp[i][2]
+                    #U[i][2] = - 1/6 * Utmp[i][0] + 1/ 6 * Utmp[i][1] - 1 / 6 * Utmp[i][2]
+                    #U[i][3] = 1/24 * Utmp[i][0] + 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
+                    #U[i][4] = 1/24 * Utmp[i][0] - 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
+                    #U[i][5] = Utmp[i][2]
+                U = Utmp.dot(G.T)
+
+                U2[:,:,co,ci] = U
+                #for i in range(6):
+                #    for j in range(6):
+                #        U2[i, j, co, ci] = U[i, j]
+        timecheck('calced U2')
+        #print('U from python', U2)
+        #print('U[:,:,0,0] from python', U2[:,:,0,0])
+        #print('U[:,:,1,0] from python', U2[:,:,1,0])
+        #print('U[:,:,16,0] from python', U2[:,:,16,0])
+        #print('U[:,:,32,0] from python', U2[:,:,32,0])
+        #print('U[:,:,0,1] from python', U2[:,:,0,1])
+        #print('U[:,:,0,2] from python', U2[:,:,0,2])
+        #print('U[:,:,16,1] from python', U2[:,:,16,1])
+
+        #print('U[:,:,32,1] from python', U2[:,:,32,1])
+        W = Wfull
+        # return U2
+
+    # this is adapted from neon's winograd_conv.py:
+    GK   = ceil_div(Co, 32)
+
+    filter_size   = 1152*Ci*GK
+    grid = (GK, Ci, 1)
+    block = (32, 1, 1)
+    W_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=W)
+    U_from_cl = np.zeros((filter_size,), dtype=np.float32)
+    print('size U_from_cl', U_from_cl.size)
+    U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U_from_cl)
+    q.finish()
+    timecheck('created U_cl buffers')
+    
+    call_cl_kernel(
+        fprop_filter_trans_4x4_kernel,
+        q, grid, block,
+        U_cl, W_cl,
+        kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152)
+    q.finish()
+    timecheck('calced U_cl')
+    cl.enqueue_copy(q, U_from_cl, U_cl)
+    #print('GK', GK, 'Ci', Ci, 'filter_size', filter_size, 'U_from_cl.size', U_from_cl.size)
+    U_from_cl = U_from_cl.reshape(GK,Ci,6,6,32)#[:Co,:,:,0]
+    #print('U_from_cl', U_from_cl)
+    #print('U_from_cl[0,0,:,:,0]', U_from_cl[0,0,:,:,0])
+    #print('U_from_cl[0,0,:,:,1]', U_from_cl[0,0,:,:,1])
+    #print('U_from_cl[0,0,:,:,16]', U_from_cl[0,0,:,:,16])
+    #print('U_from_cl[1,0,:,:,0]', U_from_cl[1,0,:,:,0])
+    #print('U_from_cl[0,1,:,:,0]', U_from_cl[0,1,:,:,0])
+    #print('U_from_cl[0,1,:,:,16]', U_from_cl[0,1,:,:,16])
+    #print('U_from_cl[1,1,:,:,0]', U_from_cl[1,1,:,:,0])
+    U_from_cl = np.transpose(U_from_cl, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
+    #print('U_from_cl[:,:,32,1]', U_from_cl[:,:,32,1])
+    assert np.allclose(U_from_cl, U2, atol=1e-4)
+    return U_from_cl
+
 def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, O):
     oH = iH
     oW = iW
@@ -285,102 +381,6 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, O):
                     #print('O.shape', O.shape, 'Otmp.shape', Otmp.shape, 'AT.T.shape', AT.T.shape)
                 O[:] = Otmp.dot(AT.T)
     timecheck('calced O')
-
-def calcU(q, W):
-    Ci = W.shape[0]
-    kH = W.shape[1]
-    kW = W.shape[2]
-    Co = W.shape[3]
-
-    if True:
-        G = np.array([[1/4,0,0],
-            [-1/6,-1/6,-1/6],
-            [-1/6,1/6,-1/6],
-            [1/24,1/12,1/6],
-            [1/24,-1/12,1/6],
-            [0,0,1]], dtype=np.float32)
-
-        Wfull = W
-
-        U2 = np.zeros((6, 6, Co, Ci), dtype=np.float32)
-        Utmp = np.zeros((6, 3), dtype=np.float32)
-        U = np.zeros((6, 6), dtype=np.float32)  # transformed filter
-        timecheck('allocaed U')
-
-        for co in range(Co):
-            for ci in range(Ci):
-                W = Wfull[ci,:,:,co].reshape(3,3)
-                #for i in range(3):
-                    #Utmp[0][i] = 1/4 * W[0][i]
-                    #Utmp[1][i] = - 1/6 * (W[0][i] + W[1][i] + W[2][i])
-                    #Utmp[2][i] = - 1/6 *W[0][i] + 1/6 * W[1][i] - 1/6 * W[2][i]
-                    #Utmp[3][i] = 1/24 * W[0][i] + 1/12 * W[1][i] + 1/6 * W[2][i]
-                    #Utmp[4][i] = 1/24 * W[0][i] - 1/12 * W[1][i] + 1/6 * W[2][i]
-                    #Utmp[5][i] = W[2][i]
-                Utmp = G.dot(W)
-
-                #for i in range(6):
-                    #U[i][0] = 1/4 * Utmp[i][0]
-                    #U[i][1] = - 1/6 * Utmp[i][0] - 1/6 * Utmp[i][1] - 1/6 * Utmp[i][2]
-                    #U[i][2] = - 1/6 * Utmp[i][0] + 1/ 6 * Utmp[i][1] - 1 / 6 * Utmp[i][2]
-                    #U[i][3] = 1/24 * Utmp[i][0] + 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
-                    #U[i][4] = 1/24 * Utmp[i][0] - 1/12 * Utmp[i][1] + 1/6 * Utmp[i][2]
-                    #U[i][5] = Utmp[i][2]
-                U = Utmp.dot(G.T)
-
-                U2[:,:,co,ci] = U
-                #for i in range(6):
-                #    for j in range(6):
-                #        U2[i, j, co, ci] = U[i, j]
-        timecheck('calced U2')
-        #print('U from python', U2)
-        #print('U[:,:,0,0] from python', U2[:,:,0,0])
-        #print('U[:,:,1,0] from python', U2[:,:,1,0])
-        #print('U[:,:,16,0] from python', U2[:,:,16,0])
-        #print('U[:,:,32,0] from python', U2[:,:,32,0])
-        #print('U[:,:,0,1] from python', U2[:,:,0,1])
-        #print('U[:,:,0,2] from python', U2[:,:,0,2])
-        #print('U[:,:,16,1] from python', U2[:,:,16,1])
-
-        #print('U[:,:,32,1] from python', U2[:,:,32,1])
-        W = Wfull
-        # return U2
-
-    # this is adapted from neon's winograd_conv.py:
-    GK   = ceil_div(Co, 32)
-
-    filter_size   = 1152*Ci*GK
-    grid = (GK, Ci, 1)
-    block = (32, 1, 1)
-    W_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=W)
-    U_from_cl = np.zeros((filter_size,), dtype=np.float32)
-    print('size U_from_cl', U_from_cl.size)
-    U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U_from_cl)
-    q.finish()
-    timecheck('created U_cl buffers')
-    
-    call_cl_kernel(
-        fprop_filter_trans_4x4_kernel,
-        q, grid, block,
-        U_cl, W_cl,
-        kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152)
-    q.finish()
-    timecheck('calced U_cl')
-    cl.enqueue_copy(q, U_from_cl, U_cl)
-    #print('GK', GK, 'Ci', Ci, 'filter_size', filter_size, 'U_from_cl.size', U_from_cl.size)
-    U_from_cl = U_from_cl.reshape(GK,Ci,6,6,32)#[:Co,:,:,0]
-    #print('U_from_cl', U_from_cl)
-    #print('U_from_cl[0,0,:,:,0]', U_from_cl[0,0,:,:,0])
-    #print('U_from_cl[0,0,:,:,1]', U_from_cl[0,0,:,:,1])
-    #print('U_from_cl[0,0,:,:,16]', U_from_cl[0,0,:,:,16])
-    #print('U_from_cl[1,0,:,:,0]', U_from_cl[1,0,:,:,0])
-    #print('U_from_cl[0,1,:,:,0]', U_from_cl[0,1,:,:,0])
-    #print('U_from_cl[0,1,:,:,16]', U_from_cl[0,1,:,:,16])
-    #print('U_from_cl[1,1,:,:,0]', U_from_cl[1,1,:,:,0])
-    U_from_cl = np.transpose(U_from_cl, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
-    #print('U_from_cl[:,:,32,1]', U_from_cl[:,:,32,1])
-    assert np.allclose(U_from_cl, U2, atol=1e-4)
-    return U_from_cl
 
 def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     inittime()
