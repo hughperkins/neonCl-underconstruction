@@ -159,6 +159,9 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
     oH = iH
     oW = iW
 
+    tiles = iW // 4
+    print('tiles', tiles)
+
     BT = np.array([[4,0,-5,0,1,0],
           [0,-4,-4,1,1,0],
           [0,4,-4,-1,1,0],
@@ -180,13 +183,11 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
         
     # I = I.reshape(iH, iW)
 
-    U2 = np.zeros((6, 6, Co, Ci), dtype=np.float32)
-    V2 = np.zeros((6, 6, Ci, 1), dtype=np.float32)
-    
     Ifull = I
     Wfull = W
     Ofull = O
 
+    U2 = np.zeros((6, 6, Co, Ci), dtype=np.float32)
     for co in range(Co):
         for ci in range(Ci):
             print('FILTER ci', ci)
@@ -221,92 +222,108 @@ def process_one(iH, iW, Ci, Co, n, kH, kW, I, W, O):
                 for j in range(6):
                     U2[i, j, co, ci] = U[i, j]
 
-    for ci in range(Ci):
-        print('IMAGE ci', ci)
-        # transform image
-        Ipadded = np.zeros((iH + 2, oH + 2), dtype=np.float32)
-        Ipadded[1:5,1:5] = Ifull[ci,:,:,n]
-        I = Ipadded
-        Vtmp = np.zeros((6,6), dtype=np.float32)
-        for i in range(6):
-            Vtmp[0][i] = + 4 * I[0][i] - 5 * I[2][i]               + I[4][i]
-            Vtmp[1][i] = - 4 * I[1][i] - 4 * I[2][i] +     I[3][i] + I[4][i]
-            Vtmp[2][i] = + 4 * I[1][i] - 4 * I[2][i] -     I[3][i] + I[4][i]
-            Vtmp[3][i] = - 2 * I[1][i] -     I[2][i] + 2 * I[3][i] + I[4][i]
-            Vtmp[4][i] = + 2 * I[1][i] -     I[2][i] - 2 * I[3][i] + I[4][i]
-            Vtmp[5][i] = + 4 * I[1][i]               - 5 * I[3][i]           + I[5][i]
-        print('Vtmp', Vtmp)
-        print('BT.dot(I)', BT.dot(I))
+    V2 = np.zeros((6, 6, Ci, tiles, tiles), dtype=np.float32)
+    for th in range(tiles):
+        for tw in range(tiles):
+            for ci in range(Ci):
+                print('IMAGE ci', ci)
+                # transform image
+                Ipadded = np.zeros((6, 6), dtype=np.float32)
+                wstart = -1 + 4 * tw
+                wend = wstart + 6 - 1
+                hstart = -1 + 4 * th
+                hend = hstart + 6 - 1
+                wstarttrunc = max(0, wstart)
+                hstarttrunc = max(0, hstart)
+                wendtrunc = min(wend, iW - 1)
+                hendtrunc = min(hend, iH - 1)
+                wstartoffset = wstarttrunc - wstart
+                hstartoffset = hstarttrunc - hstart
+                wendoffset = wendtrunc - wstart
+                hendoffset = hendtrunc - hstart
+                print('wstart', wstart, 'wend', wend, 'hstart', hstart, 'hend', hend)
+                print('wstarttrunc', wstarttrunc, 'wendtrunc', wendtrunc, 'hstarttrunc', hstarttrunc, 'hendtrunc', hendtrunc)
+                print('wstartoffset', wstartoffset, 'wendoffset', wendoffset, 'hstartoffset', hstartoffset, 'hendoffset', hendoffset)
+                Ipadded[hstartoffset:hendoffset + 1,wstartoffset:wendoffset + 1] = Ifull[ci,hstarttrunc:hendtrunc+1,wstarttrunc:wendtrunc+1,n]
+                print('Ifull', Ifull)
+                print('Ipadded', Ipadded)
+                I = Ipadded
+                Vtmp = np.zeros((6,6), dtype=np.float32)
+                for i in range(6):
+                    Vtmp[0][i] = + 4 * I[0][i] - 5 * I[2][i]               + I[4][i]
+                    Vtmp[1][i] = - 4 * I[1][i] - 4 * I[2][i] +     I[3][i] + I[4][i]
+                    Vtmp[2][i] = + 4 * I[1][i] - 4 * I[2][i] -     I[3][i] + I[4][i]
+                    Vtmp[3][i] = - 2 * I[1][i] -     I[2][i] + 2 * I[3][i] + I[4][i]
+                    Vtmp[4][i] = + 2 * I[1][i] -     I[2][i] - 2 * I[3][i] + I[4][i]
+                    Vtmp[5][i] = + 4 * I[1][i]               - 5 * I[3][i]           + I[5][i]
+                print('Vtmp', Vtmp)
+                print('BT.dot(I)', BT.dot(I))
 
-    # B
-    #  4  0  0  0  0  0
-    #  0 -4  4 -2  2  4
-    # -5 -4 -4 -1 -1  0
-    #  0  1 -1  2 -2 -5
-    #  1  1  1  1  1  0
-    #  0  0  0  0  0  1
+                V = np.zeros((6, 6), dtype=np.float32) # transformed image
+                # each i is a row of V
+                for i in range(6):
+                    V[i][0] = + 4 * Vtmp[i][0] - 5 * Vtmp[i][2]           + Vtmp[i][4]
+                    V[i][1] = - 4 * Vtmp[i][1] - 4 * Vtmp[i][2] +     Vtmp[i][3] + Vtmp[i][4]
+                    V[i][2] = + 4 * Vtmp[i][1] - 4 * Vtmp[i][2] -     Vtmp[i][3] + Vtmp[i][4]
+                    V[i][3] = - 2 * Vtmp[i][1] -     Vtmp[i][2] + 2 * Vtmp[i][3] + Vtmp[i][4]
+                    V[i][4] = + 2 * Vtmp[i][1] -     Vtmp[i][2] - 2 * Vtmp[i][3] + Vtmp[i][4]
+                    V[i][5] = + 4 * Vtmp[i][1]               - 5 * Vtmp[i][3]           + Vtmp[i][5]
+                print('V', V)
+                print('(BT.dot(I)).dot(BT.t())', (BT.dot(I)).dot(BT.T))
+                
+                for i in range(6):
+                    for j in range(6):
+                        V2[i, j, ci, th, tw] = V[i, j]
 
-        V = np.zeros((6, 6), dtype=np.float32) # transformed image
-        # each i is a row of V
-        for i in range(6):
-            V[i][0] = + 4 * Vtmp[i][0] - 5 * Vtmp[i][2]           + Vtmp[i][4]
-            V[i][1] = - 4 * Vtmp[i][1] - 4 * Vtmp[i][2] +     Vtmp[i][3] + Vtmp[i][4]
-            V[i][2] = + 4 * Vtmp[i][1] - 4 * Vtmp[i][2] -     Vtmp[i][3] + Vtmp[i][4]
-            V[i][3] = - 2 * Vtmp[i][1] -     Vtmp[i][2] + 2 * Vtmp[i][3] + Vtmp[i][4]
-            V[i][4] = + 2 * Vtmp[i][1] -     Vtmp[i][2] - 2 * Vtmp[i][3] + Vtmp[i][4]
-            V[i][5] = + 4 * Vtmp[i][1]               - 5 * Vtmp[i][3]           + Vtmp[i][5]
-        print('V', V)
-        print('(BT.dot(I)).dot(BT.t())', (BT.dot(I)).dot(BT.T))
-        
-        for i in range(6):
-            for j in range(6):
-                V2[i, j, ci, 0] = V[i, j]
+                    # I = I.reshape(Ci, iH, iW, N)
 
-            # I = I.reshape(Ci, iH, iW, N)
-
-            # filters
+                    # filters
 
     # M = np.zeros((N, Co, 1, 1)
-    M = np.zeros((Co, 1, oH + 2, oW + 2), dtype=np.float32)
-    for mh in range(oH+2):
-        for mw in range(oW+2):
+    M = np.zeros((Co, tiles, tiles, oH + 2, oW + 2), dtype=np.float32)
+    for mh in range(6):
+        for mw in range(6):
             print('mh', mh, 'mw', mw)
             print('U2[mh,mw].shape', U2[mh,mw].shape)
             print('V2[mh,mw].shape', V2[mh,mw].shape)
-            print('U2[mh,mw].dot(V2[mh,mw]).shape', U2[mh,mw].dot(V2[mh,mw]).shape)
-            print('U2[mh,mw].dot(V2[mh,mw])')
-            print(U2[mh,mw].dot(V2[mh,mw]))
-            M[:, :, mh, mw] = U2[mh,mw].dot(V2[mh,mw])
-            Mtemp = np.zeros((Co, 1), dtype=np.float32)
-            for co in range(Co):
-                sum = 0
-                for ci in range(Ci):
-                   sum += U2[mh,mw,co,ci] * V2[mh,mw,ci,0]
-                Mtemp[co,0] = sum
-            print('Mtemp', Mtemp)
+            print('tensordot', np.tensordot(U2[mh,mw], V2[mh,mw], 1))
+            #print('U2[mh,mw].dot(V2[mh,mw]).shape', U2[mh,mw].dot(V2[mh,mw]).shape)
+            #print('U2[mh,mw].dot(V2[mh,mw])')
+            #print(U2[mh,mw].dot(V2[mh,mw]))
+            # M[:, :, :, mh, mw] = U2[mh,mw].dot(V2[mh,mw])
+            M[:, :, :, mh, mw] = np.tensordot(U2[mh,mw], V2[mh,mw], 1)
+            #Mtemp = np.zeros((Co, 1), dtype=np.float32)
+            #for co in range(Co):
+            #    sum = 0
+            #    for ci in range(Ci):
+            #       sum += U2[mh,mw,co,ci] * V2[mh,mw,ci,0]
+            #    Mtemp[co,0] = sum
+            #print('Mtemp', Mtemp)
     #print('M', M)
 #    sys.exit(1)
     
     Mfull = M
     # inverse transform
     for co in range(Co):
-        M = Mfull[co, 0]
-        O = Ofull[co,:,:,n].reshape(4,4)
-        Otmp = np.zeros((4, 6), dtype=np.float32)
-        for i in range(6):
-            Otmp[0][i] = M[0][i] + M[1][i] + M[2][i] + M[3][i] + M[4][i]
-            Otmp[1][i] =         + M[1][i] - M[2][i] + 2 * M[3][i] - 2 * M[4][i]
-            Otmp[2][i] =         + M[1][i] + M[2][i] + 4 * M[3][i] + 4 * M[4][i]
-            Otmp[3][i] =         + M[1][i] - M[2][i] + 8 * M[3][i] - 8 * M[4][i] + M[5][i]
-        #print('Otmp', Otmp)
+        for th in range(tiles):
+            for tw in range(tiles):
+                O = Ofull[co,th * 4:(th+1)*4,tw*4:(tw+1)*4,n].reshape(4,4)
+                M = Mfull[co, th, tw]
+                Otmp = np.zeros((4, 6), dtype=np.float32)
+                for i in range(6):
+                    Otmp[0][i] = M[0][i] + M[1][i] + M[2][i] + M[3][i] + M[4][i]
+                    Otmp[1][i] =         + M[1][i] - M[2][i] + 2 * M[3][i] - 2 * M[4][i]
+                    Otmp[2][i] =         + M[1][i] + M[2][i] + 4 * M[3][i] + 4 * M[4][i]
+                    Otmp[3][i] =         + M[1][i] - M[2][i] + 8 * M[3][i] - 8 * M[4][i] + M[5][i]
+                #print('Otmp', Otmp)
 
-        for i in range(4):
-            O[i][0] = Otmp[i][0] + Otmp[i][1] + Otmp[i][2] + Otmp[i][3] + Otmp[i][4]
-            O[i][1] =         + Otmp[i][1] - Otmp[i][2] + 2 * Otmp[i][3] - 2 * Otmp[i][4]
-            O[i][2] =         + Otmp[i][1] + Otmp[i][2] + 4 * Otmp[i][3] + 4 * Otmp[i][4]
-            O[i][3] =         + Otmp[i][1] - Otmp[i][2] + 8 * Otmp[i][3] - 8 * Otmp[i][4] + Otmp[i][5]
-#        O = O.reshape(Co, 4, 4, N)
-        # print('AT.dot(M).dot(AT.T)', AT.dot(M).dot(AT.T))
+                for i in range(4):
+                    O[i][0] = Otmp[i][0] + Otmp[i][1] + Otmp[i][2] + Otmp[i][3] + Otmp[i][4]
+                    O[i][1] =         + Otmp[i][1] - Otmp[i][2] + 2 * Otmp[i][3] - 2 * Otmp[i][4]
+                    O[i][2] =         + Otmp[i][1] + Otmp[i][2] + 4 * Otmp[i][3] + 4 * Otmp[i][4]
+                    O[i][3] =         + Otmp[i][1] - Otmp[i][2] + 8 * Otmp[i][3] - 8 * Otmp[i][4] + Otmp[i][5]
+        #        O = O.reshape(Co, 4, 4, N)
+                # print('AT.dot(M).dot(AT.T)', AT.dot(M).dot(AT.T))
 
 def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     np.random.seed(123)
@@ -349,7 +366,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     return {'W': W, 'O': O, 'I': I}
 
 def simple1():
-    image_size = 4
+    image_size = 8
     N = 1
     Ci = 1
     Co = 1
