@@ -41,7 +41,7 @@ q = cl.CommandQueue(ctx)
 
 mf = cl.mem_flags
 
-fprop_filter_trans_kernel = winograd_kernels_cl.get_fprop_filter_trans_kernel(ctx)
+fprop_filter_trans_4x4_kernel = winograd_kernels_cl.get_fprop_filter_trans_4x4_kernel(ctx)
 
 its = 1
 
@@ -355,33 +355,34 @@ def calcU(q, W):
     #    32: (1,1,0x000,0x000), # 1x1
     #}.get(blkN)
 
-    gridCo = ceil_div(Co, 32)
+    # gridCo = ceil_div(Co, 32)
     # gridY = ceil_div(oH, 1<<shiftY)
     # gridX = ceil_div(oY, 1<<shiftX)
     # gridN = ceil_div(N, blkN)
     # Y2    = gridY // 2
     # X2    = gridX  * 2
+    GK   = ceil_div(Co, 32)
 
     dtype_itemsize = 4
-    trans_size   = Ci * gridCo * 512 * dtype_itemsize
-    trans_shared = 512 * dtype_itemsize
-    grid = (gridCo, Ci, 1)
+    filter_size   = dtype_itemsize*1152*Ci*GK
+    # trans_shared = 512 * dtype_itemsize
+    grid = (GK, Ci, 1)
     block = (32, 1, 1)
     #trans_args   = [(gridCo, Ci, 1), (32, 1, 1), None,
     #                 None, None, kH*kW*Co, kW*Co, kW*Co*2, Co]
     W_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=W)
     # U_from_cl = np.zeros((6, 6, Co, Ci), dtype=np.float32)
-    U_from_cl = np.zeros((trans_size,), dtype=np.float32)
+    U_from_cl = np.zeros((filter_size,), dtype=np.float32)
     print('size U_from_cl', U_from_cl.size)
     U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U_from_cl)
     
     #fprop_filter_trans_kernel(
-    print('trans_shared', trans_shared, 'grid', grid, 'block', block, 'W.shape', W.shape)
+    #print('trans_shared', trans_shared, 'grid', grid, 'block', block, 'W.shape', W.shape)
     call_cl_kernel(
-        fprop_filter_trans_kernel,
+        fprop_filter_trans_4x4_kernel,
         q, grid, block,
-        U_cl, W_cl, kH * kW * Co, kW * Co, kW * Co * 2, Co,
-        cl.LocalMemory(trans_shared))
+        U_cl, W_cl,
+        kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152)
     # q.finish()
     cl.enqueue_copy(q, U_from_cl, U_cl)
     U_from_cl = U_from_cl[:6*6*Co*Ci].reshape(6,6,Co,Ci)
