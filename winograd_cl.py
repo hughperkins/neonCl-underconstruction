@@ -18,18 +18,29 @@ import numpy as np
 import time
 import pyopencl as cl
 from neoncl import api
+import pyopencl as cl
+
+gpu_idx = 0
+
+platforms = cl.get_platforms()
+i = 0
+for platform in platforms:
+   gpu_devices = platform.get_devices(device_type=cl.device_type.GPU)
+   if gpu_idx < i + len(gpu_devices):
+       ctx = cl.Context(devices=[gpu_devices[gpu_idx-i]])
+       break
+   i += len(gpu_devices)
+
+print('context', ctx)
+#ctx = cl.create_some_context()
+q = cl.CommandQueue(ctx)
+
+mf = cl.mem_flags
+
 
 its = 1
 
 mf = cl.mem_flags
-
-# https://gist.github.com/lbn/836313e283f5d47d2e4e
-#def matprint(mat, fmt="g"):
-#    col_maxes = [max([len(("{:"+fmt+"}").format(x)) for x in col]) for col in mat.T]
-#    for x in mat:
-#        for i, y in enumerate(x):
-#            print(("{:"+str(col_maxes[i])+fmt+"}").format(y), end="  ")
-#        print("")
 
 def printTensor(t):
    dims = len(t.shape)

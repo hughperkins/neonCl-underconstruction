@@ -1,5 +1,6 @@
 import pyopencl as cl
-from winogradcl.backends.kernels.cl.convolution_cl import _get_conv_kernel
+from neoncl.backends.kernels.cl.convolution_cl import _get_conv_kernel
+from winograd_kernels_cl import get_fprop_filter_trans_kernel
 
 gpu_idx = 0
 
@@ -12,7 +13,8 @@ for platform in platforms:
        break
    i += len(gpu_devices)
 
-kernel = _get_conv_kernel(ctx=ctx, options='', dtype='f4', filter_size=9, bsum=False, operation='fprop')
-kernel = _get_conv_kernel(ctx=ctx, options='', dtype='f4', filter_size=9, bsum=False, operation='bprop')
-kernel = _get_conv_kernel(ctx=ctx, options='', dtype='f4', filter_size=9, bsum=False, operation='update')
+#kernel = _get_conv_kernel(ctx=ctx, options='', dtype='f4', filter_size=9, bsum=False, operation='fprop')
+#kernel = _get_conv_kernel(ctx=ctx, options='', dtype='f4', filter_size=9, bsum=False, operation='bprop')
+#kernel = _get_conv_kernel(ctx=ctx, options='', dtype='f4', filter_size=9, bsum=False, operation='update')
+kernel = get_fprop_filter_trans_kernel(ctx=ctx)
 
