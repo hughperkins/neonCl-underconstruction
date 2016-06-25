@@ -414,8 +414,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 def simple1():
     image_size = 16
     N = 4
-    Ci = 32
-    Co = 32
+    Ci = 4
+    Co = 4
  
     start = time.time()
     for it in range(5):

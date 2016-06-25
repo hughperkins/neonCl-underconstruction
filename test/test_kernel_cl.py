@@ -1,6 +1,6 @@
 import pyopencl as cl
 from neoncl.backends.kernels.cl.convolution_cl import _get_conv_kernel
-from winograd_kernels_cl import get_fprop_filter_trans_4x4_kernel
+from winograd_kernels_cl import get_fprop_filter_trans_4x4_kernel, get_xprop_image_trans_4x4_kernel
 
 gpu_idx = 0
 
@@ -18,4 +18,5 @@ for platform in platforms:
 #kernel = _get_conv_kernel(ctx=ctx, options='', dtype='f4', filter_size=9, bsum=False, operation='update')
 
 kernel = get_fprop_filter_trans_4x4_kernel(ctx=ctx)
+kernel = get_xprop_image_trans_4x4_kernel(ctx=ctx)
 
