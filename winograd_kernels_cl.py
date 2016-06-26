@@ -17,7 +17,7 @@
 import pyopencl as cl
 
 
-def get_fprop_filter_trans_4x4_kernel(ctx):
+def fprop_filter_trans_4x4_kernel(ctx):
     print('get_fprop_filter_trans_4x4_kernel')
     code = r"""
 kernel void fprop_filter_trans_4x4(
@@ -103,7 +103,7 @@ kernel void fprop_filter_trans_4x4(
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
     return module.__getattr__('fprop_filter_trans_4x4')
 
-def get_xprop_image_trans_4x4_kernel(ctx):
+def xprop_image_trans_4x4_kernel(ctx):
     print('get_xprop_image_trans_4x4_kernel')
 
     code = r"""
@@ -221,4 +221,64 @@ kernel void xprop_image_trans_4x4(
 """
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
     return module.__getattr__('xprop_image_trans_4x4')
+
+def calcM_blocked_l2(ctx):
+    code = r"""
+    kernel void calcM_blocked_l2(global float *R, const global float *U, const global float *V,
+        int A, int B
+        ) {
+        // just do really naive for now, improve later...
+        // assume block (32,1,1), which fills the warps, ignore shared memory for now
+        // incoming data is (A,B).T * (A)  ie (B,A) * (A)
+        // result will be (B)
+        // B is always 32
+        // lets use 1 thread for each B value.
+        // first, we should pull down all the data
+        // no need for sync, because we are using (32,1,1) block, exactly matches warp
+        // then each thread calculates one output value
+        // lets do output value first ,since easiest, thne pull down the data
+        
+
+        int b = get_local_id(0);
+        float sum = 0;
+        int A_blocks = A >> 5; // assume A is multipel of 32
+        for(int a_block = 0; a_block < A; a_block+= 32) {
+            #pragma unroll
+            for(int a_local = 0; a_local < 32; a_local++) {
+                int a = a_block + a_local;
+                // this will be really high latency.  improve later
+                sum += U[a<<5 + b] * V[a];
+            }
+        }
+        R[b] = sum;
+    }
+    """
+    module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
+    return module.__getattr__('calcM_blocked_l2')
+
+def fprop_calcM(ctx):
+    # grid:  (GK, GN, Y_X)
+    # block: (32, 1, 1)   # each thread used for different Ci value
+    code = r"""
+void process_ci_block(
+    global float *restrict M, global float *restrict U, global float *restrict V,
+    int gci, int gk, int gn, int x, int y) {
+}
+
+kernel void fprop_calcM(global float *restrict M, const global float *restrict U, const global float *restrict V,
+    int Ci, int GCi
+    ) {
+    int gk = get_group_id(0);
+    int gn = get_group_id(1);
+    int y_x = get_group_id(2);
+    int x = y_x & 0x7;
+    int y = y_x >> 3;
+
+    for(int gci = 0; gci < GCi; gci++) {
+        process_ci_block(M, U, V, gci, gk, gn, x, y);
+    }
+}
+    """
+    module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
+    return module.__getattr__('fprop_calcM')
 

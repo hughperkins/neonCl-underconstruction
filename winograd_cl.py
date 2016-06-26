@@ -43,8 +43,8 @@ q = cl.CommandQueue(ctx)
 
 mf = cl.mem_flags
 
-fprop_filter_trans_4x4_kernel = winograd_kernels_cl.get_fprop_filter_trans_4x4_kernel(ctx)
-xprop_image_trans_4x4_kernel = winograd_kernels_cl.get_xprop_image_trans_4x4_kernel(ctx)
+fprop_filter_trans_4x4_kernel = winograd_kernels_cl.fprop_filter_trans_4x4_kernel(ctx)
+xprop_image_trans_4x4_kernel = winograd_kernels_cl.xprop_image_trans_4x4_kernel(ctx)
 
 its = 1
 
@@ -183,7 +183,7 @@ def calcM(N, Co, U, V):
             # bytes                         eg 150KB, 4.6K, 768,     128
     
     M_cpu_blocked_l1 = winograd_cpu.calcM_blocked_l1(N=N, Co=Co, U=U, V=V)
-    assert np.allclose(M_cpu, M_cpu_blocked_l1, atol=1e-4)
+    assert np.allclose(M_cpu, M_cpu_blocked_l1, atol=1e-3)
 
     return M_cpu
 
@@ -270,9 +270,9 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     return {'W': W, 'O': O, 'I': I}
 
 def simple1():
-    image_size = 16
-    N = 16
-    Ci = 4
+    image_size = 4
+    N = 4
+    Ci = 128
     Co = 4
  
     start = time.time()

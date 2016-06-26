@@ -140,6 +140,18 @@ def calcM(N, Co, U, V):
     timecheck('calced M')
     return M
 
+def calcM_blocked_l2(U, V, axes):
+    # print('U.shape', U.shape)
+    # print('V.shape', V.shape)
+    # Ci = U
+    R1 = np.tensordot(U, V, axes)
+
+    # size = 
+
+    # sys.exit(1)
+
+    return R1
+
 def calcM_blocked_l1(N, Co, U, V):
     GK   = U.shape[0]
     Ci = U.shape[1]
@@ -169,6 +181,7 @@ def calcM_blocked_l1(N, Co, U, V):
     ci_blocksize = 32
     Co_blocksize = 32
     #N_blocks = math_helper.ceil_div(N, N_blocksize)
+    printed_size = False
     for Co_block in range(GK):
         U_block = U[Co_block]
         for N_block in range(GN):
@@ -179,7 +192,11 @@ def calcM_blocked_l1(N, Co, U, V):
                     for mh in range(6):
                         for mw in range(6):
                             for n_local in range(N_blocksize):
-                               src = np.tensordot(U_block[:, mh,mw], V_block[:,mh,mw,n_local], ([0], [0]))
+                               if not printed_size:
+                                   printed_size = True
+                                   print('left.shape', U_block[:, mh,mw].shape, 'right.shape', V_block[:,mh,mw,n_local].shape)
+                               src = calcM_blocked_l2(U_block[:, mh,mw], V_block[:,mh,mw,n_local], ([0], [0]))
+                               # src = np.tensordot(U_block[:, mh,mw], V_block[:,mh,mw,n_local], ([0], [0]))
                                dst = M_block[n_local, :, mh, mw]
                                dst[:] = src
     M = M.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6)
