@@ -257,25 +257,63 @@ def calcM_blocked_l2(ctx):
     return module.__getattr__('calcM_blocked_l2')
 
 def fprop_calcM(ctx):
-    # grid:  (GK, GN, Y_X)
+    # grid:  (GK, GN, th_tw)
     # block: (32, 1, 1)   # each thread used for different Ci value
     code = r"""
 void process_ci_block(
+    private float sums [6][6],
     global float *restrict M, global float *restrict U, global float *restrict V,
-    int gci, int gk, int gn, int x, int y) {
+        int gci, int gk, int gn, int th_tw) {
+    // load the block first... need somewhere to store it first
+    // each thead handles one co values, and all x/y values
+    
+    // first download the data, into shared memory
+    // we have to donwload:
+    // U
+    // V
+
+    int tid = get_local_id(0);
+    // U first
+    local float4 U4[6*6*32];
+    local float *U_ = (local float *)U4; // block of 4 ci values at a time??? If too much, we lose occupancy...
+    int offset = gci << 2 ;
+    #pragma unroll
+    for(int i = 0; i < 6*6*32; i+= 32) {
+        U4[tid + i] = U[offset + tid + i];
+    }
+    // no need for sync, since num workgroup threads == warpsize
+    
+    // each thread handles one value of co, for each of the other values
+//    for(int ci=0; ci < 4; ci++) {
+ //      for(int xi=0; xi < 6; xi++) {
+  //         #pragma unroll
+   //        for(int nu=0; nu < 6; nu++) {
+    //           U_[ci][xi][nu][tid] = U[
+     //      }
+      // }
+    //}
+
+    // now process it
+    for(int xi=0; xi < 6; xi++) {
+        for(int nu=0; nu < 6; nu++) {
+           for(int ci=0; ci < 4; ci++) {
+           }
+        }
+    }
 }
 
 kernel void fprop_calcM(global float *restrict M, const global float *restrict U, const global float *restrict V,
-    int Ci, int GCi
+        int Ci, int GCi
     ) {
     int gk = get_group_id(0);
     int gn = get_group_id(1);
-    int y_x = get_group_id(2);
-    int x = y_x & 0x7;
-    int y = y_x >> 3;
+    int th_tw = get_group_id(2);
+    //int th = th_tw >> 3;
+    //int tw = th_tw & 0x7;
 
+    private sums[6][6];
     for(int gci = 0; gci < GCi; gci++) {
-        process_ci_block(M, U, V, gci, gk, gn, x, y);
+        process_ci_block(sums, M, U, V, gci, gk, gn, th_tw);
     }
 }
     """
