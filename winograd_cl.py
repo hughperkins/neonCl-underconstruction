@@ -97,17 +97,11 @@ def calcU(q, W):
     #U_from_cl = np.transpose(U_from_cl, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
     # assert np.allclose(U_from_cl, U2, atol=1e-4)
 
+    # layout
+    # [xi, nu, Co // 32, Ci, Co % 32]
+
     U_from_cpu = winograd_cpu.calcU(W=W)
-    # print(U_from_cl[:,:,0,0,0])
     U_from_cl_ = U_from_cl.transpose(0,1,2,4,3).reshape(6,6,GK * 32,Ci)[:,:,:Co,:]
-    #print(U_from_cpu[:,:,0,0])
-    #print(U_from_cl_[:,:,0,0])
-    #print('')
-    #print(U_from_cpu[:,:,0,1])
-    #print(U_from_cl_[:,:,0,1])
-    #print('')
-    #print(U_from_cpu[:,:,1,0])
-    #print(U_from_cl_[:,:,1,0])
 
     assert np.allclose(U_from_cl_, U_from_cpu, atol=1e-4)
 
@@ -203,12 +197,19 @@ def calcM(N, Co, U, V):
     GN = V.shape[2]
 
     M_cpu = winograd_cpu.calcM(N=N, Co=Co, U=U, V=V)
-    
+
+    # old layouts:
     # U                           Co // 32,       Ci,    6,   6, Co % 32
                          # bytes:           eg 150KB, 4.6K, 768,     128
     # V            # tiles, tiles, N // 32,       Ci,    6,   6,  N % 32
             # bytes                         eg 150KB, 4.6K, 768,     128
-    
+
+    # new layouts:
+    # U
+    # [xi, nu, Co // 32, Ci, Co % 32]
+    # V
+    # [xi, nu, n // 32, th, tw, ci, n % 32]
+
     M_cpu_blocked_l1 = winograd_cpu.calcM_blocked_l1(N=N, Co=Co, U=U, V=V)
     assert np.allclose(M_cpu, M_cpu_blocked_l1, atol=1e-3)
 
