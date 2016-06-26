@@ -13,16 +13,17 @@
 # limitations under the License.
 
 from __future__ import print_function, division
-
-import numpy as np
 import time
+import numpy as np
 import pyopencl as cl
 from neoncl import api
 import pyopencl as cl
 from neoncl.util.math_helper import get_div_mul_shift_32, get_div_mul_shift_64, ceil_div
 import winograd_kernels_cl
+import winograd_cpu
 from neoncl.backends.kernels.cl.callkernel import call_cl_kernel
 import cpu_check
+from timecheck import inittime, timecheck
 
 
 gpu_idx = 0
@@ -60,17 +61,6 @@ def printTensor(t):
             for y in range(t.shape[2]):
                line += '%.1f ' % t[i][x][y]
             print(line)
-
-last = 0
-def inittime():
-    global last
-    last = time.time()
-
-def timecheck(label):
-    global last
-    now = time.time()
-    print(label, '%.2f ms' % ((now - last) * 1000))
-    last = now
 
 def calcU(q, W):
     Ci = W.shape[0]
@@ -179,36 +169,20 @@ def calcV(I):
     return V_from_cl
 
 def calcM(N, Co, U, V):
-    U_from_cl = U
-    V_from_cl = V
-
     # U_from_cl.reshape(GK,Ci,6,6,32)
     GK   = U.shape[0]
     Ci = U.shape[1]
     tiles = V.shape[0]
     GN = V.shape[2]
 
-    U = np.transpose(U, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
-
-    V = np.transpose(V, [2, 6, 4, 5, 3, 0, 1])
-    V = V.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
-
-    # tiles = iW // 4
-    M = np.zeros((N, Co, tiles, tiles, 6, 6), dtype=np.float32)
-    for n in range(N):
-        for mh in range(6):
-            for mw in range(6):
-                #print('U2[mh,mw].shape', U2[mh,mw].shape, V2[mh,mw].shape)
-                M[n,:, :, :, mh, mw] = np.tensordot(U[mh,mw], V[n,mh,mw], 1)
-                # res = np.tensordot(U2[mh,mw], V2[mh,mw], 1)
-                #print('res.shape', res.shape)
-                # M[:, :, :, mh, mw] = res
-    timecheck('calced M')
+    M_cpu = winograd_cpu.calcM(N=N, Co=Co, U=U, V=V)
     
-    U = U_from_cl
-    V = V_from_cl
-
-    return M
+    # U                           Co // 32,       Ci,    6,   6, Co % 32
+                         # bytes:           eg 150KB, 4.6K, 768,     128
+    # V            # tiles, tiles, N // 32,       Ci,    6,   6,  N % 32
+            # bytes                         eg 150KB, 4.6K, 768,     128
+    
+    return M_cpu
 
 def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, V, M, O):
     oH = iH

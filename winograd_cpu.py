@@ -1,5 +1,9 @@
 # used as reference version, for comparison/correctness
 
+import numpy as np
+from timecheck import inittime, timecheck
+
+
 def calcU(W):
     Ci = W.shape[0]
     kH = W.shape[1]
@@ -114,4 +118,28 @@ def calcV(I):
       #                      V2[i, j, ci, th, tw] = V[i, j]
         timecheck('calced V2')
     return V2
+
+def calcM(N, Co, U, V):
+    GK   = U.shape[0]
+    Ci = U.shape[1]
+    tiles = V.shape[0]
+    GN = V.shape[2]
+
+    U = np.transpose(U, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
+
+    V = np.transpose(V, [2, 6, 4, 5, 3, 0, 1])
+    V = V.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
+
+    # tiles = iW // 4
+    M = np.zeros((N, Co, tiles, tiles, 6, 6), dtype=np.float32)
+    for n in range(N):
+        for mh in range(6):
+            for mw in range(6):
+                #print('U2[mh,mw].shape', U2[mh,mw].shape, V2[mh,mw].shape)
+                M[n,:, :, :, mh, mw] = np.tensordot(U[mh,mw], V[n,mh,mw], 1)
+                # res = np.tensordot(U2[mh,mw], V2[mh,mw], 1)
+                #print('res.shape', res.shape)
+                # M[:, :, :, mh, mw] = res
+    timecheck('calced M')
+    return M
 
