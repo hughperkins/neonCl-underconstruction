@@ -168,10 +168,10 @@ def calcM_blocked_l1(N, Co, U, V):
     N_blocksize = 32
     ci_blocksize = 32
     Co_blocksize = 32
-    N_blocks = math_helper.ceil_div(N, N_blocksize)
+    #N_blocks = math_helper.ceil_div(N, N_blocksize)
     for Co_block in range(GK):
         U_block = U[Co_block]
-        for N_block in range(N_blocks):
+        for N_block in range(GN):
             for th in range(tiles):
                 for tw in range(tiles):
                     V_block = V[th, tw, N_block]
