@@ -145,7 +145,7 @@ def calcM_blocked_l1(N, Co, U, V):
     Ci = U.shape[1]
     tiles = V.shape[0]
     GN = V.shape[2]
-    
+
     # U  [        Co // 32,      Ci, 6, 6, Co % 32]   # 32 * 6 * 6 * 32 * 4 = 147KB
     #         blocks of Ci=4 ?
     # V  [tH, tW,           N // 32, 6, 6,  N % 32]   # 6 * 6 * 32 * 4 = 4.5KB
@@ -161,17 +161,17 @@ def calcM_blocked_l1(N, Co, U, V):
     # U: 
     # V: 
     # overall: 
-    
+
     N_blocksize = 32
     ci_blocksize = 32
     N_blocks = math_helper.ceil_div(N, N_blocksize)
-    for mh in range(6):
-        for mw in range(6):
-           for N_block in range(N_blocks):
-              V_block = V[N_block * N_blocksize:(N_block + 1) * N_blocksize]
-              print('V.shape', V.shape, 'V_block.shape', V_block.shape)
-              M_block = M[N_block * N_blocksize:(N_block + 1) * N_blocksize, :, :, :]
-              print('M.shape', V.shape, 'V_block.shape', V_block.shape)
+    for N_block in range(N_blocks):
+      V_block = V[N_block * N_blocksize:(N_block + 1) * N_blocksize]
+      print('V.shape', V.shape, 'V_block.shape', V_block.shape)
+      M_block = M[N_block * N_blocksize:(N_block + 1) * N_blocksize, :, :, :]
+      print('M.shape', V.shape, 'V_block.shape', V_block.shape)
+      for mh in range(6):
+          for mw in range(6):
               for n_local in range(N_blocksize):
                  # n_global = N_block * N_blocksize + n_local
                  M_block[n_local,:, :, :, mh, mw] = np.tensordot(U[mh,mw], V_block[n_local,mh,mw], 1)
