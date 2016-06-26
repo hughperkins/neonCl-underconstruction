@@ -158,7 +158,7 @@ def calcM_blocked_l1(N, Co, U, V):
 
     # tiles = iW // 4
     # M = np.zeros((N, Co, tiles, tiles, 6, 6), dtype=np.float32)
-    M = np.zeros((N, GK, 32, tiles, tiles, 6, 6), dtype=np.float32)
+    M = np.zeros((GN, 32, GK, 32, tiles, tiles, 6, 6), dtype=np.float32)
     # ponder superblocks of:
     # U: 
     # V: 
@@ -175,15 +175,15 @@ def calcM_blocked_l1(N, Co, U, V):
             for th in range(tiles):
                 for tw in range(tiles):
                     V_block = V[th, tw, N_block]
-                    M_block = M[N_block * N_blocksize:(N_block + 1) * N_blocksize, Co_block, :, th, tw]
+                    M_block = M[N_block, :, Co_block, :, th, tw]
                     for mh in range(6):
                         for mw in range(6):
                             for n_local in range(N_blocksize):
                                src = np.tensordot(U_block[:, mh,mw], V_block[:,mh,mw,n_local], ([0], [0]))
                                dst = M_block[n_local, :, mh, mw]
                                dst[:] = src
-    M = M.reshape(N, GK * 32, tiles, tiles, 6, 6)
-    M = M[:, :Co]
+    M = M.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6)
+    M = M[:N, :Co]
     timecheck('calced M')
     return M
 

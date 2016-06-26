@@ -271,7 +271,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 
 def simple1():
     image_size = 16
-    N = 32
+    N = 16
     Ci = 4
     Co = 4
  
