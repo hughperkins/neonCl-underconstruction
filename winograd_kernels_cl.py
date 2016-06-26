@@ -22,7 +22,7 @@ def fprop_filter_trans_4x4_kernel(ctx):
     code = r"""
 kernel void fprop_filter_trans_4x4(
     global float* Out, global const float* In,
-    int RSK, int SK, int SK2, int K, int C1152)
+    int RSK, int SK, int SK2, int K, int C1152, int C, int GK)
 {
     int tid  = get_local_id(0);
     //if(tid != 0) {
@@ -32,6 +32,11 @@ kernel void fprop_filter_trans_4x4(
     int c    = get_num_groups(1) - get_group_id(1) - 1;
     int k    = (blkK<<5) + tid;
 
+    // output before:
+    // [Co//32][Ci][xi][nu][Co % 32]
+    
+    // output in new order:
+    // [xi][nu][Co//32][Ci][Co % 32]
     int out_offset = blkK*C1152 + c*1152 + tid;
 
     bool valid_k = k < K;
@@ -81,18 +86,40 @@ kernel void fprop_filter_trans_4x4(
         T[4][i] = fma(I[1][i], -rcp12, t2);
         T[5][i] = I[2][i];
     }
+    // output in new order:
+    // [xi][nu][Co//32][Ci][Co % 32]
+
+    // we can probably make these kernel parameters
+    int nu_stride = 32 * C * GK;
+    int xi_stride = nu_stride * 6;
+    //int nu_stride = 0;
+    //int xi_stride = 0;
+    out_offset = tid +                // Co % 32
+                 (c << 5) +           // Ci
+                 ((blkK * C) << 5)    // Co // 32
+                 ;
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
         float t0 = rcp6 * T[i][2];
         float t1 = fma(T[i][0], -rcp6, -t0);
         float t2 = fma(T[i][0], rcp24,  t0);
-        Out[out_offset + 32*(i*6 + 0)] = (rcp4 * T[i][0]);
-        Out[out_offset + 32*(i*6 + 1)] = (fma(T[i][1], -rcp6,  t1));
-        Out[out_offset + 32*(i*6 + 2)] = (fma(T[i][1],  rcp6,  t1));
-        Out[out_offset + 32*(i*6 + 3)] = (fma(T[i][1],  rcp12, t2));
-        Out[out_offset + 32*(i*6 + 4)] = (fma(T[i][1], -rcp12, t2));
-        Out[out_offset + 32*(i*6 + 5)] = (T[i][2]);
+        // Out[out_offset + 32*(i*6 + 0)] = (rcp4 * T[i][0]);
+        // Out[out_offset + 32*(i*6 + 1)] = (fma(T[i][1], -rcp6,  t1));
+        // Out[out_offset + 32*(i*6 + 2)] = (fma(T[i][1],  rcp6,  t1));
+        // Out[out_offset + 32*(i*6 + 3)] = (fma(T[i][1],  rcp12, t2));
+        // Out[out_offset + 32*(i*6 + 4)] = (fma(T[i][1], -rcp12, t2));
+        // Out[out_offset + 32*(i*6 + 5)] = (T[i][2]);
+
+        // output in new order:
+        // [xi][nu][Co//32][Ci][Co % 32]
+
+        Out[out_offset + i * xi_stride + 0 * nu_stride] = (rcp4 * T[i][0]);
+        Out[out_offset + i * xi_stride + 1 * nu_stride] = (fma(T[i][1], -rcp6,  t1));
+        Out[out_offset + i * xi_stride + 2 * nu_stride] = (fma(T[i][1],  rcp6,  t1));
+        Out[out_offset + i * xi_stride + 3 * nu_stride] = (fma(T[i][1],  rcp12, t2));
+        Out[out_offset + i * xi_stride + 4 * nu_stride] = (fma(T[i][1], -rcp12, t2));
+        Out[out_offset + i * xi_stride + 5 * nu_stride] = (T[i][2]);
     }
 
 }

@@ -85,14 +85,24 @@ def calcU(q, W):
         fprop_filter_trans_4x4_kernel,
         q, grid, block,
         U_cl, W_cl,
-        kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152)
+        kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152,
+        Ci, GK)
+    print('Ci', Ci, 'Co', Co, 'W.shape', W.shape, 'W.size', W.size, 'U_from_cl.size', U_from_cl.size)
     q.finish()
     timecheck('calced U_cl')
     cl.enqueue_copy(q, U_from_cl, U_cl)
     #print('GK', GK, 'Ci', Ci, 'filter_size', filter_size, 'U_from_cl.size', U_from_cl.size)
-    U_from_cl = U_from_cl.reshape(GK,Ci,6,6,32)#[:Co,:,:,0]
+    U_from_cl = U_from_cl.reshape(6,6,GK,Ci,32)#[:Co,:,:,0]
     #U_from_cl = np.transpose(U_from_cl, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
     # assert np.allclose(U_from_cl, U2, atol=1e-4)
+
+    U_from_cpu = winograd_cpu.calcU(W=W)
+    print(U_from_cl[:,:,0,0,0])
+    U_from_cl_ = U_from_cl.transpose(0,1,2,4,3).reshape(6,6,GK * 32,Ci)[:,:,:Co,:]
+    print(U_from_cpu[:,:,0,0])
+    print(U_from_cl_[:,:,0,0])
+
+    sys.exit(1)
     return U_from_cl
 
 def calcV(I):

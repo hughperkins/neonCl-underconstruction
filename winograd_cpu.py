@@ -49,6 +49,9 @@ def calcU(W):
             U2[:,:,co,ci] = U
     timecheck('calced U2')
 
+    # layout:
+    # [xi, nu, co, ci]
+
     return U2
 
 def calcV(I):
@@ -134,9 +137,9 @@ def calcM(N, Co, U, V):
     # tiles = iW // 4
     M = np.zeros((N, Co, tiles, tiles, 6, 6), dtype=np.float32)
     for n in range(N):
-        for mh in range(6):
-            for mw in range(6):
-                M[n,:, :, :, mh, mw] = np.tensordot(U[mh,mw], V[n,mh,mw], 1)
+        for xi in range(6):
+            for nu in range(6):
+                M[n,:, :, :, xi, nu] = np.tensordot(U[xi,nu], V[n,xi,nu], 1)
     timecheck('calced M')
     return M
 
