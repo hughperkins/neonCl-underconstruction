@@ -150,14 +150,15 @@ def calcM_blocked_l1(N, Co, U, V):
     #         blocks of Ci=4 ?
     # V  [tH, tW,           N // 32, Ci, 6, 6,  N % 32]   # 32 * 6 * 6 * 32 * 4 = 147KB
 
-    U = np.transpose(U, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
+    # U = np.transpose(U, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
     # [6, 6, Co, Ci]
 
     #V = np.transpose(V, [2, 6, 4, 5, 3, 0, 1])
     #V = V.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
 
     # tiles = iW // 4
-    M = np.zeros((N, Co, tiles, tiles, 6, 6), dtype=np.float32)
+    # M = np.zeros((N, Co, tiles, tiles, 6, 6), dtype=np.float32)
+    M = np.zeros((N, GK, 32, tiles, tiles, 6, 6), dtype=np.float32)
     # ponder superblocks of:
     # U: 
     # V: 
@@ -166,20 +167,31 @@ def calcM_blocked_l1(N, Co, U, V):
     # print('U.shape', U.shape)
     N_blocksize = 32
     ci_blocksize = 32
+    Co_blocksize = 32
     N_blocks = math_helper.ceil_div(N, N_blocksize)
-    for N_block in range(N_blocks):
-      for th in range(tiles):
-          for tw in range(tiles):
-              #V_block = V[th, tw, N_block * N_blocksize:(N_block + 1) * N_blocksize]
-              V_block = V[th, tw, N_block]
-              # print('V.shape', V.shape, 'V_block.shape', V_block.shape)
-              M_block = M[N_block * N_blocksize:(N_block + 1) * N_blocksize, :, th, tw]
-              # print('M.shape', V.shape, 'M_block.shape', M_block.shape)
-              for mh in range(6):
-                  for mw in range(6):
-                      for n_local in range(N_blocksize):
-                         # n_global = N_block * N_blocksize + n_local
-                         M_block[n_local,:, mh, mw] = np.tensordot(U[mh,mw], V_block[:,mh,mw,n_local], ([1], [0]))
+    for Co_block in range(GK):
+        U_block = U[Co_block]
+        #print('U_block.shape', U_block.shape)
+        for N_block in range(N_blocks):
+            for th in range(tiles):
+                for tw in range(tiles):
+                    #V_block = V[th, tw, N_block * N_blocksize:(N_block + 1) * N_blocksize]
+                    V_block = V[th, tw, N_block]
+                    #print('V_block.shape', V_block.shape)
+                    M_block = M[N_block * N_blocksize:(N_block + 1) * N_blocksize, Co_block, :, th, tw]
+                    #print('M_block.shape', M_block.shape)
+                    for mh in range(6):
+                        for mw in range(6):
+                            for n_local in range(N_blocksize):
+                               # n_global = N_block * N_blocksize + n_local
+                               src = np.tensordot(U_block[:, mh,mw], V_block[:,mh,mw,n_local], ([0], [0]))
+                               #print('src.shape', src.shape)
+                               dst = M_block[n_local, :, mh, mw]
+                               #print('dst.shape', dst.shape)
+                               dst[:] = src
+                               # = np.tensordot(U_block[:, mh,mw], V_block[:,mh,mw,n_local], ([0], [0]))
+    M = M.reshape(N, GK * 32, tiles, tiles, 6, 6)
+    M = M[:, :Co]
     timecheck('calced M')
     return M
 
