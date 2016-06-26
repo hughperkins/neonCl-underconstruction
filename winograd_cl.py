@@ -97,12 +97,17 @@ def calcU(q, W):
     # assert np.allclose(U_from_cl, U2, atol=1e-4)
 
     U_from_cpu = winograd_cpu.calcU(W=W)
-    print(U_from_cl[:,:,0,0,0])
-    U_from_cl_ = U_from_cl.transpose(0,1,2,4,3).reshape(6,6,GK * 32,Ci)[:,:,:Co,:]
+    # print(U_from_cl[:,:,0,0,0])
+    U_from_cl_ = U_from_cl.transpose(0,1,2,4,3).reshape(6,6,GK * 32,Ci) # [:,:,:Co,:]
     print(U_from_cpu[:,:,0,0])
     print(U_from_cl_[:,:,0,0])
-
-    sys.exit(1)
+    print('')
+    print(U_from_cpu[:,:,0,1])
+    print(U_from_cl_[:,:,0,1])
+    print('')
+    print(U_from_cpu[:,:,1,0])
+    print(U_from_cl_[:,:,1,0])
+    
     return U_from_cl
 
 def calcV(I):
