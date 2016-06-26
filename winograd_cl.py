@@ -43,8 +43,9 @@ q = cl.CommandQueue(ctx)
 
 mf = cl.mem_flags
 
-fprop_filter_trans_4x4_kernel = winograd_kernels_cl.fprop_filter_trans_4x4_kernel(ctx)
-xprop_image_trans_4x4_kernel = winograd_kernels_cl.xprop_image_trans_4x4_kernel(ctx)
+k_calcU = winograd_kernels_cl.calcU(ctx)
+k_calcV = winograd_kernels_cl.calcV(ctx)
+# xprop_image_trans_4x4_kernel = winograd_kernels_cl.xprop_image_trans_4x4_kernel(ctx)
 
 its = 1
 
@@ -82,7 +83,7 @@ def calcU(q, W):
     timecheck('created U_cl buffers')
     
     call_cl_kernel(
-        fprop_filter_trans_4x4_kernel,
+        k_calcU,
         q, grid, block,
         U_cl, W_cl,
         kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152,
@@ -98,7 +99,7 @@ def calcU(q, W):
 
     U_from_cpu = winograd_cpu.calcU(W=W)
     # print(U_from_cl[:,:,0,0,0])
-    U_from_cl_ = U_from_cl.transpose(0,1,2,4,3).reshape(6,6,GK * 32,Ci) # [:,:,:Co,:]
+    U_from_cl_ = U_from_cl.transpose(0,1,2,4,3).reshape(6,6,GK * 32,Ci)[:,:,:Co,:]
     print(U_from_cpu[:,:,0,0])
     print(U_from_cl_[:,:,0,0])
     print('')
@@ -107,7 +108,9 @@ def calcU(q, W):
     print('')
     print(U_from_cpu[:,:,1,0])
     print(U_from_cl_[:,:,1,0])
-    
+
+    assert np.allclose(U_from_cl_, U_from_cpu, atol=1e-4)
+
     return U_from_cl
 
 def calcV(I):
@@ -160,26 +163,35 @@ def calcV(I):
     block = (32, 1, 1)
 
     call_cl_kernel(
-        xprop_image_trans_4x4_kernel,
+        k_calcV,
         q, grid, block,
         V_cl, I_cl,
         
         iH, iW, N, padH, padW,
         GXS, GYS2, GXS2, div_GXS2[0], div_GXS2[1],
         shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
-        iH * iW * N, iW * N, GYS*GXS*Ci*1152, GXS * Ci * 1152, Ci * 1152)
+        iH * iW * N, iW * N, GYS*GXS*Ci*1152, GXS * Ci * 1152, Ci * 1152,
+        GXS, GXS * GYS, GN, Ci)
     q.finish()
     timecheck('calced V_cl')
 
     cl.enqueue_copy(q, V_from_cl, V_cl)
     print('image_size', image_size)
     print('GXS', GXS, 'GYS', GYS, 'GN', GN, 'Ci', Ci)
-    V_from_cl = V_from_cl.reshape(GYS,GXS,GN,Ci,6,6,32)
+    V_from_cl = V_from_cl.reshape(6,6,GYS,GXS,GN,Ci,32)
+    # [xi, nu, n // 32, th, tw, ci, n % 32]
+
+    V_from_cpu = winograd_cpu.calcV(I=I)
+    # [n, xi, nu, ci, th, tw]]
+
+    V_from_cl_ = V_from_cl.transpose(
+        2,6,0,1,5,3,4).reshape(
+        GN * 32, 6, 6, Ci, tiles, tiles)[:N]
 
     #V_from_cl = np.transpose(V_from_cl, [2, 6, 4, 5, 3, 0, 1])
     #V_from_cl = V_from_cl.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
 
-    # assert np.allclose(V_from_cl, V2, atol=1e-4)
+    assert np.allclose(V_from_cl_, V_from_cpu, atol=1e-4)
 
     return V_from_cl
 

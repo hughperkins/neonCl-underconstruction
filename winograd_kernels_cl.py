@@ -17,10 +17,10 @@
 import pyopencl as cl
 
 
-def fprop_filter_trans_4x4_kernel(ctx):
-    print('get_fprop_filter_trans_4x4_kernel')
+def calcU(ctx):
+    print('calcU')
     code = r"""
-kernel void fprop_filter_trans_4x4(
+kernel void calcU(
     global float* Out, global const float* In,
     int RSK, int SK, int SK2, int K, int C1152, int C, int GK)
 {
@@ -128,10 +128,10 @@ kernel void fprop_filter_trans_4x4(
         f.write(code)
 
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
-    return module.__getattr__('fprop_filter_trans_4x4')
+    return module.__getattr__('calcU')
 
-def xprop_image_trans_4x4_kernel(ctx):
-    print('get_xprop_image_trans_4x4_kernel')
+def calcV(ctx):
+    print('calcV')
 
     code = r"""
 static inline int div64(int value, int div_mul, int div_shift)
@@ -146,12 +146,13 @@ static inline int div64(int value, int div_mul, int div_shift)
     return result;
 }
 
-kernel void xprop_image_trans_4x4(
+kernel void calcV(
     global float* Out, global const float* In,
     int Y, int X, int N, int pad_y, int pad_x,
     int GXS, int GYS2, int GXS2, int magic_GXS2, int shift_GXS2,
     int shlY, int shlX, int maskY, int shrY, int maskX, int shrX, int shlN, int maskN,
-    int YXN, int XN, int GYS_GXS_C_1152, int GXS_C_1152, int C_1152)
+    int YXN, int XN, int GYS_GXS_C_1152, int GXS_C_1152, int C_1152,
+    int GX, int GY_GX, int GN, int C)
 {
     int tid   = get_local_id(0);
     int blkN  = get_num_groups(0) - get_group_id(0) - 1;
@@ -179,8 +180,6 @@ kernel void xprop_image_trans_4x4(
     int y0 = (gy << shlY) + (((tid & maskY) >> shrY) << 2) - pad_y;
     int x0 = (gx << shlX) + (((tid & maskX) >> shrX) << 2) - pad_x;
     int n  = (blkN << shlN) + (tid & maskN);
-
-    int out_offset = blkN*GYS_GXS_C_1152 + gy*GXS_C_1152 + gx*C_1152 + c*1152 + tid;
 
     bool valid = n < N;
 
@@ -228,6 +227,22 @@ kernel void xprop_image_trans_4x4(
         T[4][i] = fma(t3, -2.0f, t2);
         T[5][i] = fma(I[1][i], 4.0f, t5);
     }
+    // old layout:
+    // [tH, tW,           N // 32, Ci, xi, nu,  N % 32]
+
+    // new layout:
+    // [xi, nu, N // 32, tH, tW, Ci, N % 32]
+    // (note: since last dimension is 32, this is always going to be 128-byte aligned)
+
+    int out_offset = tid +            // N % 32
+                     (c << 5) +         // ci
+                     gx * (C << 5) +  // tw (?)
+                     gy * GX * (C << 5); // th (?)  (also, not sure if this should be GX or GY?
+    // int out_offset = blkN*GYS_GXS_C_1152 + gy*GXS_C_1152 + gx*C_1152 + c*1152 + tid;
+
+    int nu_stride = GN * GY_GX * (C << 5);
+    int xi_stride = nu_stride * 6;
+
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
@@ -237,17 +252,18 @@ kernel void xprop_image_trans_4x4(
         float t3 = T[i][3] - T[i][1];
         float t4 = fma(T[i][2], -5.0f, T[i][4]);
         float t5 = fma(T[i][3], -5.0f, T[i][5]);
-        Out[out_offset + 32*(i*6 + 0)] = (fma(T[i][0], 4.0f, t4));
-        Out[out_offset + 32*(i*6 + 1)] = (t0 + t1);
-        Out[out_offset + 32*(i*6 + 2)] = (t0 - t1);
-        Out[out_offset + 32*(i*6 + 3)] = (fma(t3,  2.0f, t2));
-        Out[out_offset + 32*(i*6 + 4)] = (fma(t3, -2.0f, t2));
-        Out[out_offset + 32*(i*6 + 5)] = (fma(T[i][1], 4.0f, t5));
+
+        Out[out_offset + i * xi_stride + 0 * nu_stride] = (fma(T[i][0], 4.0f, t4));
+        Out[out_offset + i * xi_stride + 1 * nu_stride] = (t0 + t1);
+        Out[out_offset + i * xi_stride + 2 * nu_stride] = (t0 - t1);
+        Out[out_offset + i * xi_stride + 3 * nu_stride] = (fma(t3,  2.0f, t2));
+        Out[out_offset + i * xi_stride + 4 * nu_stride] = (fma(t3, -2.0f, t2));
+        Out[out_offset + i * xi_stride + 5 * nu_stride] = (fma(T[i][1], 4.0f, t5));
     }
 }
 """
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
-    return module.__getattr__('xprop_image_trans_4x4')
+    return module.__getattr__('calcV')
 
 def calcM_blocked_l2(ctx):
     code = r"""
