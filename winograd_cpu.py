@@ -128,7 +128,7 @@ def calcM(N, Co, U, V):
     # Ci = U.shape[1]
     GK = U.shape[2]
     Ci = U.shape[3]
-    tiles = V.shape[0]
+    tiles = V.shape[3]
     GN = V.shape[2]
 
     # U = np.transpose(U, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
@@ -137,8 +137,12 @@ def calcM(N, Co, U, V):
     U = U.transpose(0,1,2,4,3).reshape(6,6,GK * 32,Ci)[:,:,:Co,:]
     # U = np.transpose(U, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
 
-    V = np.transpose(V, [2, 6, 4, 5, 3, 0, 1])
-    V = V.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
+    V = V.transpose(
+        2,6,0,1,5,3,4).reshape(
+        GN * 32, 6, 6, Ci, tiles, tiles)[:N]
+
+    #V = np.transpose(V, [2, 6, 4, 5, 3, 0, 1])
+    #V = V.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
 
     # tiles = iW // 4
     M = np.zeros((N, Co, tiles, tiles, 6, 6), dtype=np.float32)
@@ -165,7 +169,7 @@ def calcM_blocked_l2(U, V, axes):
 def calcM_blocked_l1(N, Co, U, V):
     GK   = U.shape[2]
     Ci = U.shape[3]
-    tiles = V.shape[0]
+    tiles = V.shape[3]
     GN = V.shape[2]
 
     # U  [        Co // 32,      Ci, 6, 6, Co % 32]   # 32 * 6 * 6 * 32 * 4 = 147KB
@@ -186,27 +190,26 @@ def calcM_blocked_l1(N, Co, U, V):
     # V: 
     # overall: 
 
-    # print('U.shape', U.shape)
     N_blocksize = 32
     ci_blocksize = 32
     Co_blocksize = 32
-    #N_blocks = math_helper.ceil_div(N, N_blocksize)
     printed_size = False
     for Co_block in range(GK):
         U_block = U[:,:,Co_block]
         for N_block in range(GN):
             for th in range(tiles):
                 for tw in range(tiles):
-                    V_block = V[th, tw, N_block]
+                    V_block = V[:, :, N_block, th, tw]
                     M_block = M[N_block, :, Co_block, :, th, tw]
                     for mh in range(6):
                         for mw in range(6):
                             for n_local in range(N_blocksize):
+                               left = U_block[mh,mw]
+                               right = V_block[mh,mw,:,n_local]
                                if not printed_size:
                                    printed_size = True
-                                   print('left.shape', U_block[mh,mw].shape, 'right.shape', V_block[:,mh,mw,n_local].shape)
-                               src = calcM_blocked_l2(U_block[mh,mw], V_block[:,mh,mw,n_local], ([0], [0]))
-                               # src = np.tensordot(U_block[:, mh,mw], V_block[:,mh,mw,n_local], ([0], [0]))
+                                   print('left.shape', left.shape, 'right.shape', right.shape)
+                               src = calcM_blocked_l2(left, right, ([0], [0]))
                                dst = M_block[n_local, :, mh, mw]
                                dst[:] = src
     M = M.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6)
