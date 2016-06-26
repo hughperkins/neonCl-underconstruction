@@ -148,12 +148,13 @@ def calcM_blocked_l1(N, Co, U, V):
 
     # U  [        Co // 32,      Ci, 6, 6, Co % 32]   # 32 * 6 * 6 * 32 * 4 = 147KB
     #         blocks of Ci=4 ?
-    # V  [tH, tW,           N // 32, 6, 6,  N % 32]   # 6 * 6 * 32 * 4 = 4.5KB
+    # V  [tH, tW,           N // 32, Ci, 6, 6,  N % 32]   # 32 * 6 * 6 * 32 * 4 = 147KB
 
     U = np.transpose(U, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
+    # [6, 6, Co, Ci]
 
-    V = np.transpose(V, [2, 6, 4, 5, 3, 0, 1])
-    V = V.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
+    #V = np.transpose(V, [2, 6, 4, 5, 3, 0, 1])
+    #V = V.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
 
     # tiles = iW // 4
     M = np.zeros((N, Co, tiles, tiles, 6, 6), dtype=np.float32)
@@ -162,19 +163,23 @@ def calcM_blocked_l1(N, Co, U, V):
     # V: 
     # overall: 
 
+    # print('U.shape', U.shape)
     N_blocksize = 32
     ci_blocksize = 32
     N_blocks = math_helper.ceil_div(N, N_blocksize)
     for N_block in range(N_blocks):
-      V_block = V[N_block * N_blocksize:(N_block + 1) * N_blocksize]
-      print('V.shape', V.shape, 'V_block.shape', V_block.shape)
-      M_block = M[N_block * N_blocksize:(N_block + 1) * N_blocksize, :, :, :]
-      print('M.shape', V.shape, 'V_block.shape', V_block.shape)
-      for mh in range(6):
-          for mw in range(6):
-              for n_local in range(N_blocksize):
-                 # n_global = N_block * N_blocksize + n_local
-                 M_block[n_local,:, :, :, mh, mw] = np.tensordot(U[mh,mw], V_block[n_local,mh,mw], 1)
+      for th in range(tiles):
+          for tw in range(tiles):
+              #V_block = V[th, tw, N_block * N_blocksize:(N_block + 1) * N_blocksize]
+              V_block = V[th, tw, N_block]
+              # print('V.shape', V.shape, 'V_block.shape', V_block.shape)
+              M_block = M[N_block * N_blocksize:(N_block + 1) * N_blocksize, :, th, tw]
+              # print('M.shape', V.shape, 'M_block.shape', M_block.shape)
+              for mh in range(6):
+                  for mw in range(6):
+                      for n_local in range(N_blocksize):
+                         # n_global = N_block * N_blocksize + n_local
+                         M_block[n_local,:, mh, mw] = np.tensordot(U[mh,mw], V_block[:,mh,mw,n_local], ([1], [0]))
     timecheck('calced M')
     return M
 
