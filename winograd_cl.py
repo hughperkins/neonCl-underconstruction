@@ -182,6 +182,9 @@ def calcM(N, Co, U, V):
     # V            # tiles, tiles, N // 32,       Ci,    6,   6,  N % 32
             # bytes                         eg 150KB, 4.6K, 768,     128
     
+    M_cpu_blocked_l1 = winograd_cpu.calcM_blocked_l1(N=N, Co=Co, U=U, V=V)
+    assert np.allclose(M_cpu, M_cpu_blocked_l1, atol=1e-4)
+
     return M_cpu
 
 def process_one(iH, iW, Ci, Co, n, kH, kW, I, U, V, M, O):
