@@ -171,25 +171,17 @@ def calcM_blocked_l1(N, Co, U, V):
     N_blocks = math_helper.ceil_div(N, N_blocksize)
     for Co_block in range(GK):
         U_block = U[Co_block]
-        #print('U_block.shape', U_block.shape)
         for N_block in range(N_blocks):
             for th in range(tiles):
                 for tw in range(tiles):
-                    #V_block = V[th, tw, N_block * N_blocksize:(N_block + 1) * N_blocksize]
                     V_block = V[th, tw, N_block]
-                    #print('V_block.shape', V_block.shape)
                     M_block = M[N_block * N_blocksize:(N_block + 1) * N_blocksize, Co_block, :, th, tw]
-                    #print('M_block.shape', M_block.shape)
                     for mh in range(6):
                         for mw in range(6):
                             for n_local in range(N_blocksize):
-                               # n_global = N_block * N_blocksize + n_local
                                src = np.tensordot(U_block[:, mh,mw], V_block[:,mh,mw,n_local], ([0], [0]))
-                               #print('src.shape', src.shape)
                                dst = M_block[n_local, :, mh, mw]
-                               #print('dst.shape', dst.shape)
                                dst[:] = src
-                               # = np.tensordot(U_block[:, mh,mw], V_block[:,mh,mw,n_local], ([0], [0]))
     M = M.reshape(N, GK * 32, tiles, tiles, 6, 6)
     M = M[:, :Co]
     timecheck('calced M')
