@@ -83,15 +83,16 @@ def calcU(q, W):
     q.finish()
     timecheck('created U_cl buffers')
     
-    call_cl_kernel(
-        k_calcU,
-        q, grid, block,
-        U_cl, W_cl,
-        kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152,
-        Ci, GK)
-    print('Ci', Ci, 'Co', Co, 'W.shape', W.shape, 'W.size', W.size, 'U_from_cl.size', U_from_cl.size)
-    q.finish()
-    timecheck('calced U_cl')
+    for it in range(4):
+        call_cl_kernel(
+            k_calcU,
+            q, grid, block,
+            U_cl, W_cl,
+            kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152,
+            Ci, GK)
+        print('Ci', Ci, 'Co', Co, 'W.shape', W.shape, 'W.size', W.size, 'U_from_cl.size', U_from_cl.size)
+        q.finish()
+        timecheck('calced U_cl')
     cl.enqueue_copy(q, U_from_cl, U_cl)
     #print('GK', GK, 'Ci', Ci, 'filter_size', filter_size, 'U_from_cl.size', U_from_cl.size)
     U_from_cl = U_from_cl.reshape(6,6,GK,Ci,32)#[:Co,:,:,0]
@@ -158,18 +159,19 @@ def calcV(I):
     grid = (GN, GYS*GXS, Ci)
     block = (32, 1, 1)
 
-    call_cl_kernel(
-        k_calcV,
-        q, grid, block,
-        V_cl, I_cl,
-        
-        iH, iW, N, padH, padW,
-        GXS, GYS2, GXS2, div_GXS2[0], div_GXS2[1],
-        shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
-        iH * iW * N, iW * N, GYS*GXS*Ci*1152, GXS * Ci * 1152, Ci * 1152,
-        GXS, GXS * GYS, GN, Ci)
-    q.finish()
-    timecheck('calced V_cl')
+    for it in range(4):
+        call_cl_kernel(
+            k_calcV,
+            q, grid, block,
+            V_cl, I_cl,
+            
+            iH, iW, N, padH, padW,
+            GXS, GYS2, GXS2, div_GXS2[0], div_GXS2[1],
+            shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
+            iH * iW * N, iW * N, GYS*GXS*Ci*1152, GXS * Ci * 1152, Ci * 1152,
+            GXS, GXS * GYS, GN, Ci)
+        q.finish()
+        timecheck('calced V_cl')
 
     cl.enqueue_copy(q, V_from_cl, V_cl)
     print('image_size', image_size)
@@ -221,6 +223,16 @@ def calcM(N, Co, U, V):
         Ci, 1)
     q.finish()
     timecheck('calced M_cl')
+
+    for it in range(3):
+        call_cl_kernel(
+            k_calcM,
+            q, grid, block,
+            M_cl, U_cl, V_cl,
+            
+            Ci, 1)
+        q.finish()
+        timecheck('calced M_cl')
 
     cl.enqueue_copy(q, M_from_cl, M_cl)
 
