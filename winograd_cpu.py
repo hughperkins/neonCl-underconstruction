@@ -120,7 +120,7 @@ def calcV(I):
     #                for i in range(6):
      #                   for j in range(6):
       #                      V2[i, j, ci, th, tw] = V[i, j]
-        timecheck('calced V2')
+    timecheck('calced V')
     return V2
 
 def calcM(N, Co, U, V):
