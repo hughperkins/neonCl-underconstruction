@@ -380,7 +380,7 @@ void process_ci_block(
                             // lets assume that Ci, N and Co are all exactly 32
                             // image size should be 4, ie no tiling
     local float V_[32 * 32];
-    int tid = get_local_id(0)
+    int tid = get_local_id(0);
     // use tid for ci
     int ci = tid;
     int ci32 = ci << 5;
@@ -404,10 +404,22 @@ void process_ci_block(
        for(int ci32=0; ci32 < 32 * 32; ci32 += 32) {
           sum += U_[ci32 + co] * V_[ci32 + n];
        }
-       M[
+       int offset = 0 +  // (n // 32)
+                    n * 1 * 32 * 1 * 1 * 6 * 6 + // (n % 32)
+                    0 + //  (co // 32)
+                    co * 1 * 1 * 6 * 6 + // (co % 32)
+                    0 +   // th
+                    0 +   // tw
+                    0 +   // xi
+                    0 +   // nu
+                    0.0f;
+       M[offset] = sum;
     }
 }
 // M has following dimensions:  th, tw, n // 32 n % 32, co // 32, co % 32, xi, nu
+// we should probalby put xi, nu innermost?  then tiles next (so we can create whole images), then rest
+// maybe arbitrary?
+// [n//32][n % 32][co // 32][co % 32][th][tw][xi][nu]
 
 kernel void fprop_calcM(global float *restrict M, const global float *restrict U, const global float *restrict V,
         int Ci, int GCi
