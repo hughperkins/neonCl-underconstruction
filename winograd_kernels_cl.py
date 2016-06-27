@@ -450,3 +450,49 @@ kernel void calcM(global float *restrict M, const global float *restrict U, cons
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
     return module.__getattr__('calcM')
 
+def calcO(ctx):
+    # grid:  (GK, GN, th_tw)
+    # block: (32, 1, 1)   # each thread used for different Ci value
+    code = r"""
+kernel void calcO(
+    global float *O, global float *M, int GID) {
+    // lets just do stupidly for now, improve later...
+    // assume block (32,1,1)
+    // for calcU, each thread does one entire tile (6x6)  Let's do the same thing
+    // let's just have a linear grid for now, to keep it simple stupid, then improve it later
+    int gid = get_global_id(0);
+    if(gid >= GID) {
+        return;
+    }
+    // let's assume this is ... well it doesnt matter actually, we simply do the same operation for all
+    // so just grab a tile, and transform it...
+    int M_offset = gid * 6 * 6; // 6x6 tiles
+    float M_[6][6];
+    for(int i = 0; i < 6; i++) {
+        int i6 = i * 6;
+        #pragma unroll
+        for(int j = 0; j < 6; j++) {
+            M_[i][j] = M[M_offset + i6 + j];
+        }
+    }
+    float Otmp[4][6];
+    for(int i = 0; i < 6; i++) {
+        Otmp[0][i] = M_[0][i] + M_[1][i] + M_[2][i] + M_[3][i] + M_[4][i];
+        Otmp[1][i] =          + M_[1][i] - M_[2][i] + 2.0f * M_[3][i] - 2.0f * M_[4][i];
+        Otmp[2][i] =          + M_[1][i] + M_[2][i] + 4.0f * M_[3][i] + 4.0f * M_[4][i];
+        Otmp[3][i] =          + M_[1][i] - M_[2][i] + 8.0f * M_[3][i] - 8.0f * M_[4][i] + M_[5][i];
+    }
+
+    global float *restrict O_ = O + gid * 4 * 4;
+    for(int i = 0; i < 4; i++) {
+        int i6 = (i << 3) - (i << 1);
+        O_[i6 + 0] = Otmp[i][0] + Otmp[i][1] + Otmp[i][2] + Otmp[i][3] + Otmp[i][4];
+        O_[i6 + 1] =         + Otmp[i][1] - Otmp[i][2] + 2.0f * Otmp[i][3] - 2.0f * Otmp[i][4];
+        O_[i6 + 2] =         + Otmp[i][1] + Otmp[i][2] + 4.0f * Otmp[i][3] + 4.0f * Otmp[i][4];
+        O_[i6 + 3] =         + Otmp[i][1] - Otmp[i][2] + 8.0f * Otmp[i][3] - 8.0f * Otmp[i][4] + Otmp[i][5];
+    }
+}
+    """
+    module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
+    return module.__getattr__('calcO')
+
