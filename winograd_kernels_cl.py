@@ -485,11 +485,11 @@ kernel void calcO(
 
     global float *restrict O_ = O + gid * 4 * 4;
     for(int i = 0; i < 4; i++) {
-        int i6 = (i << 3) - (i << 1);
-        O_[i6 + 0] = Otmp[i][0] + Otmp[i][1] + Otmp[i][2] + Otmp[i][3] + Otmp[i][4];
-        O_[i6 + 1] =         + Otmp[i][1] - Otmp[i][2] + 2.0f * Otmp[i][3] - 2.0f * Otmp[i][4];
-        O_[i6 + 2] =         + Otmp[i][1] + Otmp[i][2] + 4.0f * Otmp[i][3] + 4.0f * Otmp[i][4];
-        O_[i6 + 3] =         + Otmp[i][1] - Otmp[i][2] + 8.0f * Otmp[i][3] - 8.0f * Otmp[i][4] + Otmp[i][5];
+        int i4 = (i << 2);
+        O_[i4 + 0] = Otmp[i][0] + Otmp[i][1] + Otmp[i][2] + Otmp[i][3] + Otmp[i][4];
+        O_[i4 + 1] =         + Otmp[i][1] - Otmp[i][2] + 2.0f * Otmp[i][3] - 2.0f * Otmp[i][4];
+        O_[i4 + 2] =         + Otmp[i][1] + Otmp[i][2] + 4.0f * Otmp[i][3] + 4.0f * Otmp[i][4];
+        O_[i4 + 3] =         + Otmp[i][1] - Otmp[i][2] + 8.0f * Otmp[i][3] - 8.0f * Otmp[i][4] + Otmp[i][5];
     }
 }
     """
