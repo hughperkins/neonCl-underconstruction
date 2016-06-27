@@ -227,16 +227,6 @@ def calcM(N, Co, U, V):
     M_cpu = winograd_cpu.calcM(N=N, Co=Co, U=U, V=V)
 
     M_from_cl_ = M_from_cl.reshape(GK * 32, GN * 32, tiles, tiles, 6, 6)
-    print('M_cpu.shape', M_cpu.shape)
-    print('M_from_cl_.shape', M_from_cl_.shape)
-
-    #M_from_cl_ = M_from_cl.transpose()
-    print(M_from_cl_[0,0,0,0])
-    print(M_cpu[0,0,0,0])
-    print(M_from_cl_[0,1,0,0])
-    print(M_cpu[0,1,0,0])
-    print(M_from_cl_[1,0,0,0])
-    print(M_cpu[1,0,0,0])
 
     assert np.allclose(M_cpu, M_from_cl_, atol=1e-3)
 
