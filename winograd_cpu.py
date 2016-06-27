@@ -115,36 +115,21 @@ def calcV(I):
                         #V[i][4] = + 2 * Vtmp[i][1] -     Vtmp[i][2] - 2 * Vtmp[i][3] + Vtmp[i][4]
                         #V[i][5] = + 4 * Vtmp[i][1]               - 5 * Vtmp[i][3]           + Vtmp[i][5]
                     V2[n, :,:,ci,th,tw] = Vtmp.dot(BT.T)
-                    #V = Vtmp.dot(BT.T)
-                    #V2[:,:,ci,th,tw] = V
-    #                for i in range(6):
-     #                   for j in range(6):
-      #                      V2[i, j, ci, th, tw] = V[i, j]
     timecheck('calced V')
     return V2
 
 def calcM(N, Co, U, V):
-    # GK   = U.shape[0]
-    # Ci = U.shape[1]
     GK = U.shape[2]
     Ci = U.shape[3]
     tiles = V.shape[3]
     GN = V.shape[2]
 
-    # U = np.transpose(U, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
-    # print('U.shape', U.shape)
-    # print('GK', GK, 'Ci', Ci)
     U = U.transpose(0,1,2,4,3).reshape(6,6,GK * 32,Ci)[:,:,:Co,:]
-    # U = np.transpose(U, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
 
     V = V.transpose(
         2,6,0,1,5,3,4).reshape(
         GN * 32, 6, 6, Ci, tiles, tiles)[:N]
 
-    #V = np.transpose(V, [2, 6, 4, 5, 3, 0, 1])
-    #V = V.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
-
-    # tiles = iW // 4
     M = np.zeros((N, Co, tiles, tiles, 6, 6), dtype=np.float32)
     for n in range(N):
         for xi in range(6):
@@ -154,16 +139,7 @@ def calcM(N, Co, U, V):
     return M
 
 def calcM_blocked_l2(U, V, axes):
-    # print('U.shape', U.shape)
-    # print('V.shape', V.shape)
-    # print('axes', axes)
-    # Ci = U
     R1 = np.tensordot(U, V, axes)
-
-    # size = 
-
-    # sys.exit(1)
-
     return R1
 
 def calcM_blocked_l1(N, Co, U, V):
@@ -217,9 +193,6 @@ def calcO(M):
     oH = tiles * 4  # is this always true?  anyway, it's true for now...
     oW = tiles * 4
 
-    #oH = iH
-    #oW = iW
-
     O = np.zeros((Co, oH, oW, N), dtype=np.float32)
     Mfull = M
     Ofull = O
@@ -239,7 +212,6 @@ def calcO(M):
                 for tw in range(tiles):
                     O = Ofull[co,th * 4:(th+1)*4,tw*4:(tw+1)*4,n]
                     M = Mfull[n, co, th, tw]
-                    #print('M.shape', M.shape)
                     #for i in range(6):
                         #Otmp[0][i] = M[0][i] + M[1][i] + M[2][i] + M[3][i] + M[4][i]
                         #Otmp[1][i] =         + M[1][i] - M[2][i] + 2 * M[3][i] - 2 * M[4][i]
@@ -254,8 +226,6 @@ def calcO(M):
                         #O[i][2] =         + Otmp[i][1] + Otmp[i][2] + 4 * Otmp[i][3] + 4 * Otmp[i][4]
                         #O[i][3] =         + Otmp[i][1] - Otmp[i][2] + 8 * Otmp[i][3] - 8 * Otmp[i][4] + Otmp[i][5]
                         #print('O.shape', O.shape, 'Otmp.shape', Otmp.shape, 'AT.T.shape', AT.T.shape)
-                    #print('O.shape', O.shape)
-                    #print('Otmp.dot(AT.T).shape', Otmp.dot(AT.T).shape)
                     O[:] = Otmp.dot(AT.T)
     timecheck('calced O')
     return Ofull
