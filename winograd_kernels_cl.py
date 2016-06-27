@@ -299,7 +299,7 @@ def calcM_blocked_l2(ctx):
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
     return module.__getattr__('calcM_blocked_l2')
 
-def fprop_calcM(ctx):
+def calcM(ctx):
     # grid:  (GK, GN, th_tw)
     # block: (32, 1, 1)   # each thread used for different Ci value
     code = r"""
@@ -421,7 +421,7 @@ void process_ci_block(
 // maybe arbitrary?
 // [n//32][n % 32][co // 32][co % 32][th][tw][xi][nu]
 
-kernel void fprop_calcM(global float *restrict M, const global float *restrict U, const global float *restrict V,
+kernel void calcM(global float *restrict M, const global float *restrict U, const global float *restrict V,
         int Ci, int GCi
     ) {
     int gk = get_group_id(0);
@@ -439,5 +439,5 @@ kernel void fprop_calcM(global float *restrict M, const global float *restrict U
 }
     """
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
-    return module.__getattr__('fprop_calcM')
+    return module.__getattr__('calcM')
 

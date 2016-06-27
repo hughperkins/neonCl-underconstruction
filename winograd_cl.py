@@ -45,6 +45,7 @@ mf = cl.mem_flags
 
 k_calcU = winograd_kernels_cl.calcU(ctx)
 k_calcV = winograd_kernels_cl.calcV(ctx)
+k_calcM = winograd_kernels_cl.calcM(ctx)
 # xprop_image_trans_4x4_kernel = winograd_kernels_cl.xprop_image_trans_4x4_kernel(ctx)
 
 its = 1
@@ -106,6 +107,7 @@ def calcU(q, W):
     assert np.allclose(U_from_cl_, U_from_cpu, atol=1e-4)
 
     return U_from_cl
+    #return U_from_cpu
 
 def calcV(I):
     Ifull = I
@@ -190,13 +192,52 @@ def calcV(I):
     return V_from_cl
 
 def calcM(N, Co, U, V):
-    # U_from_cl.reshape(GK,Ci,6,6,32)
-    GK   = U.shape[0]
-    Ci = U.shape[1]
-    tiles = V.shape[0]
+    # U_from_cl.reshape(GK,Ci,6,6,32)  6,6,GK,Ci,32
+    print('U.shape', U.shape)
+    Co = (U.shape[2] - 1) * 32 + U.shape[4]
+    Ci = U.shape[3]
+    GK   = ceil_div(Co, 32)
+    tiles = V.shape[4]
     GN = V.shape[2]
+    print('GK', GK, 'GN', GN, 'tiles', tiles, 'Co', Co, 'Ci', Ci)
+
+    # M_from_cl = np.zeros((GK * 32 * GN * 32 * tiles * tiles * 6 * 6,), dtype=np.float32)
+    M_from_cl = np.zeros((GK, 32, GN, 32, tiles, tiles, 6, 6,), dtype=np.float32)
+    U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U)
+    V_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=V)
+    M_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=M_from_cl)
+    q.finish()
+    timecheck('allocated M_cl buffers')
+
+    # grid = (GN, GYS*GXS, Ci)
+    grid = (1,1,1) # for now...
+    block = (32, 1, 1)
+
+    call_cl_kernel(
+        k_calcM,
+        q, grid, block,
+        M_cl, U_cl, V_cl,
+        
+        Ci, 1)
+    q.finish()
+    timecheck('calced M_cl')
+
+    cl.enqueue_copy(q, M_from_cl, M_cl)
 
     M_cpu = winograd_cpu.calcM(N=N, Co=Co, U=U, V=V)
+
+    M_from_cl_ = M_from_cl.reshape(GK * 32, GN * 32, tiles, tiles, 6, 6)
+    print('M_cpu.shape', M_cpu.shape)
+    print('M_from_cl_.shape', M_from_cl_.shape)
+
+    #M_from_cl_ = M_from_cl.transpose()
+    print(M_from_cl_[0,0,0,0])
+    print(M_cpu[0,0,0,0])
+    print(M_from_cl_[0,1,0,0])
+    print(M_cpu[0,1,0,0])
+    print(M_from_cl_[1,0,0,0])
+    print(M_cpu[1,0,0,0])
+    sys.exit(1)
 
     # old layouts:
     # U                           Co // 32,       Ci,    6,   6, Co % 32
