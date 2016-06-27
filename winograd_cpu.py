@@ -172,23 +172,17 @@ def calcM_blocked_l1(N, Co, U, V):
     tiles = V.shape[3]
     GN = V.shape[2]
 
-    # U  [        Co // 32,      Ci, 6, 6, Co % 32]   # 32 * 6 * 6 * 32 * 4 = 147KB
-    #         blocks of Ci=4 ?
-    # V  [tH, tW,           N // 32, Ci, 6, 6,  N % 32]   # 32 * 6 * 6 * 32 * 4 = 147KB
-
-    # U = np.transpose(U, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
-    # [6, 6, Co, Ci]
-
-    #V = np.transpose(V, [2, 6, 4, 5, 3, 0, 1])
-    #V = V.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
-
-    # tiles = iW // 4
-    # M = np.zeros((N, Co, tiles, tiles, 6, 6), dtype=np.float32)
     M = np.zeros((GN, 32, GK, 32, tiles, tiles, 6, 6), dtype=np.float32)
-    # ponder superblocks of:
-    # U: 
-    # V: 
-    # overall: 
+
+    # new layouts:
+    # U
+    # [xi, nu, co // 32,         ci, co % 32]
+    # V
+    # [xi, nu,  n // 32, th, tw, ci,  n % 32]
+
+    # each block:
+    # U [ci, co % 32]
+    # V [ci, ni % 32]
 
     N_blocksize = 32
     ci_blocksize = 32

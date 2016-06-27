@@ -303,7 +303,7 @@ def fprop_calcM(ctx):
     # grid:  (GK, GN, th_tw)
     # block: (32, 1, 1)   # each thread used for different Ci value
     code = r"""
-void process_ci_block(
+void process_ci_block_too_complicated_do_simple_for_now(
     global float *restrict M, global float *restrict U, global float *restrict V,
         int Ci, int gci, int gk, int gn, int th_tw) {
 
@@ -368,6 +368,47 @@ void process_ci_block(
 
 }
 
+void process_ci_block(
+    global float *restrict M, global float *restrict U, global float *restrict V,
+        int Ci, int gci, int gk, int gn, int th_tw) {
+    // handles a block of all Ci (U and V), 32 co values (U), 32 n values (V)
+    // saves the results up to M
+    // for now, let's do simple and stupid, no float4s or anything, just get something working :-P
+    // also, dont worry about register spills, occupancy etc ...
+
+    local float U_[32 * 32]; // do 32 values of ci at a time; and since we're trying to keep it simple
+                            // lets assume that Ci, N and Co are all exactly 32
+                            // image size should be 4, ie no tiling
+    local float V_[32 * 32];
+    int tid = get_local_id(0)
+    // use tid for ci
+    int ci = tid;
+    int ci32 = ci << 5;
+    for(int co = 0; co < 32; co++) {
+        // just copy directly, ignore latency hiding for now
+        U_[ci32 + co] = U[ci32 + co];
+    }
+    for(int n = 0; n < 32; n++) {
+        // just copy directly, ignore latency hiding for now
+        V_[ci32 + n] = V[ci32 + n];
+    }
+    // no need to sync threads, since workgroup size == warpsize, ie 32 (TODO: AMD)
+    
+    // each thread handles ... hmmm...we'd better have 1024 threads (on NVIDIA), or 256 anyway (works also on AMD)
+    // anyway, for now, each thread handles one value of co, all values of n block, and all values of ci
+    // two loops
+    int co = tid;
+    for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
+       float sum = 0.0f;
+       #pragma unroll
+       for(int ci32=0; ci32 < 32 * 32; ci32 += 32) {
+          sum += U_[ci32 + co] * V_[ci32 + n];
+       }
+       M[
+    }
+}
+// M has following dimensions:  th, tw, n // 32 n % 32, co // 32, co % 32, xi, nu
+
 kernel void fprop_calcM(global float *restrict M, const global float *restrict U, const global float *restrict V,
         int Ci, int GCi
     ) {
@@ -378,9 +419,11 @@ kernel void fprop_calcM(global float *restrict M, const global float *restrict U
     //int tw = th_tw & 0x7;
 
     //private sums[6][6];
-    for(int gci = 0; gci < GCi; gci++) {
-        process_ci_block(M, U, V, Ci, gci, gk, gn, th_tw);
-    }
+    //for(int gci = 0; gci < GCi; gci++) {
+        process_ci_block(M, U, V, Ci, 0, 0, 0, 0);  // we are assuming Ci, N, Co are 32; image_size is 4 (no tiling)
+                                                    // will generalize later
+                                                    // also, ignore xi and nu for now, just calc one value for each xi/nu tile...
+    //}
 }
     """
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
