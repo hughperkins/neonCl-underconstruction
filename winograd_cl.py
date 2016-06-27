@@ -278,12 +278,8 @@ def calcO(M):
     timecheck('allocated O_cl buffers')
 
     num_xinu_tiles = GK * 32 * GN * 32 * tiles * tiles
-    print('num_xinu_tiles', num_xinu_tiles)
-    # GID = ceil_div(num_xinu_tiles, 32)
     grid = (ceil_div(num_xinu_tiles, 32), 1, 1)
     block = (32, 1, 1)
-    print('grid', grid)
-    print('block', block)
 
     call_cl_kernel(
         k_calcO,
@@ -300,30 +296,8 @@ def calcO(M):
         [0,1,-1,8,-8,1]], dtype=np.float32)
 
     cl.enqueue_copy(q, O_from_cl, O_cl)
-    print('M[0,0,0,0]', M[0,0,0,0])
-    print(AT.dot(M[0,0,0,0]).dot(AT.T))
-    print('O_fromcl[0,0,0,0]', O_from_cl[0,0,0,0])
-    print('')
-    print('O_fromcl[0,1,0,0]', O_from_cl[0,1,0,0])
-    print('')
-    print('M[0,0,0,1]', M[0,0,0,1])
-    print(AT.dot(M[0,0,0,1]).dot(AT.T))
-    print('O_fromcl[0,0,0,1]', O_from_cl[0,0,0,1])
-    print('')
-    print('M[0,1,0,0]', M[0,1,0,0])
-    print(AT.dot(M[0,1,0,0]).dot(AT.T))
-    print('O_fromcl[0,1,0,0]', O_from_cl[0,1,0,0])
-    print('')
     O_from_cl_ = O_from_cl.reshape(GK * 32, GN * 32, tiles, tiles, 4, 4).transpose(1, 2, 4, 3, 5, 0).reshape(
         GK * 32, tiles * 4, tiles * 4, GN * 32)
-    print('O_from_cl_', O_from_cl_[0,:,:,0])
-    print('O_from_cpu', O_from_cpu[0,:,:,0])
-    print('')
-    print('O_from_cpu', O_from_cpu[0,:,:,1])
-    print('O_from_cl_', O_from_cl_[0,:,:,1])
-    print('')
-    print('O_from_cpu', O_from_cpu[1,:,:,0])
-    print('O_from_cl_', O_from_cl_[1,:,:,0])
 
     assert np.allclose(O_from_cpu, O_from_cl_, atol=1e-3)
 
