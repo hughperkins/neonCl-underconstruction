@@ -46,7 +46,7 @@ mf = cl.mem_flags
 k_calcU = winograd_kernels_cl.calcU(ctx)
 k_calcV = winograd_kernels_cl.calcV(ctx)
 k_calcM = winograd_kernels_cl.calcM(ctx)
-# xprop_image_trans_4x4_kernel = winograd_kernels_cl.xprop_image_trans_4x4_kernel(ctx)
+k_calcO = winograd_kernels_cl.calcO(ctx)
 
 its = 1
 
@@ -257,7 +257,52 @@ def calcM(N, Co, U, V):
     M_cpu_blocked_l1 = winograd_cpu.calcM_blocked_l1(N=N, Co=Co, U=U, V=V)
     assert np.allclose(M_cpu, M_cpu_blocked_l1, atol=1e-3)
 
-    return M_cpu
+    return M_from_cl
+
+def calcO(M):
+    print('M.shape', M.shape)
+
+    GK = M.shape[2]
+    GN = M.shape[0]
+    tiles = M.shape[4]
+
+    print('GK', GK, 'GN', GN, 'tiles', tiles)
+    O_from_cpu = winograd_cpu.calcO(M=M.reshape(GK * 32, GN * 32, tiles, tiles, 6, 6))
+
+    M_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=M)
+
+    O_from_cl = np.zeros((GK, 32, GN, 32, tiles, tiles, 4, 4,), dtype=np.float32)
+    M_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=M)
+    O_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=O_from_cl)
+    q.finish()
+    timecheck('allocated O_cl buffers')
+
+    num_xinu_tiles = GK * 32 * GN * 32 * tiles * tiles
+    # GID = ceil_div(num_xinu_tiles, 32)
+    grid = (ceil_div(num_xinu_tiles, 32) // 32, 1, 1)
+    block = (32, 1, 1)
+
+    call_cl_kernel(
+        k_calcO,
+        q, grid, block,
+        O_cl, M_cl,
+        num_xinu_tiles
+    )
+    q.finish()
+    timecheck('calced O_cl')
+
+    cl.enqueue_copy(q, O_from_cl, O_cl)
+    O_from_cl_ = O_from_cl.reshape(GK * 32, GN * 32, tiles, tiles, 4, 4).transpose(0, 2, 4, 3, 5, 1).reshape(
+        GK * 32, tiles * 4, tiles * 4, GN * 32)
+    print('O_from_cl_', O_from_cl_[0,:,:,0])
+    print('O_from_cpu', O_from_cpu[0,:,:,0])
+    print('')
+    print('O_from_cl_', O_from_cl_[0,:,:,1])
+    print('O_from_cl_', O_from_cl_[1,:,:,0])
+    print('O_from_cpu', O_from_cpu[0,:,:,1])
+    print('O_from_cpu', O_from_cpu[1,:,:,0])
+
+    return O_from_cpu
 
 def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     inittime()
@@ -277,7 +322,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     V = calcV(I=I)
     M = calcM(N=N, Co=Co, U=U, V=V)
 
-    O = winograd_cpu.calcO(M=M)
+    O = calcO(M=M)
 
     return {'W': W, 'O': O, 'I': I}
 
