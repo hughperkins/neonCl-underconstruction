@@ -237,7 +237,7 @@ def calcO(M):
         for co in range(Co):
             for th in range(tiles):
                 for tw in range(tiles):
-                    O = Ofull[co,th * 4:(th+1)*4,tw*4:(tw+1)*4,n].reshape(4,4)
+                    O = Ofull[co,th * 4:(th+1)*4,tw*4:(tw+1)*4,n]
                     M = Mfull[n, co, th, tw]
                     #print('M.shape', M.shape)
                     #for i in range(6):
