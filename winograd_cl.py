@@ -237,7 +237,8 @@ def calcM(N, Co, U, V):
     print(M_cpu[0,1,0,0])
     print(M_from_cl_[1,0,0,0])
     print(M_cpu[1,0,0,0])
-    sys.exit(1)
+
+    assert np.allclose(M_cpu, M_from_cl_, atol=1e-3)
 
     # old layouts:
     # U                           Co // 32,       Ci,    6,   6, Co % 32
