@@ -384,36 +384,45 @@ void process_ci_block(
     // use tid for ci
     int ci = tid;
     int ci32 = ci << 5;
-    for(int co = 0; co < 32; co++) {
-        // just copy directly, ignore latency hiding for now
-        U_[ci32 + co] = U[ci32 + co];
-    }
-    for(int n = 0; n < 32; n++) {
-        // just copy directly, ignore latency hiding for now
-        V_[ci32 + n] = V[ci32 + n];
-    }
-    // no need to sync threads, since workgroup size == warpsize, ie 32 (TODO: AMD)
-    
-    // each thread handles ... hmmm...we'd better have 1024 threads (on NVIDIA), or 256 anyway (works also on AMD)
-    // anyway, for now, each thread handles one value of co, all values of n block, and all values of ci
-    // two loops
-    int co = tid;
-    for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
-       float sum = 0.0f;
-       #pragma unroll
-       for(int ci32=0; ci32 < 32 * 32; ci32 += 32) {
-          sum += U_[ci32 + co] * V_[ci32 + n];
-       }
-       int offset = 0 +  // (n // 32)
-                    n * 1 * 32 * 1 * 1 * 6 * 6 + // (n % 32)
-                    0 + //  (co // 32)
-                    co * 1 * 1 * 6 * 6 + // (co % 32)
-                    0 +   // th
-                    0 +   // tw
-                    0 +   // xi
-                    0 +   // nu
-                    0.0f;
-       M[offset] = sum;
+    // stupidly loop over xi and nu for now, to at least get a baseline time, which we can improve a bit...
+    int xinu_U_stride = 1 * 32 * 32;  // assuming all 32 for now :-P
+    int xinu_V_stride = 1 * 1 * 1 * 32 * 32;  // assuming 32 again
+    for(int xi = 0; xi < 6; xi++) {
+        for(int nu=0; nu < 6; nu++) {
+            int b = xi * 6 + nu;
+            for(int co = 0; co < 32; co++) {
+                // just copy directly, ignore latency hiding for now
+                U_[ci32 + co] = U[b * xinu_U_stride + ci32 + co];
+            }
+            for(int n = 0; n < 32; n++) {
+                // just copy directly, ignore latency hiding for now
+                V_[ci32 + n] = V[b * xinu_V_stride + ci32 + n];
+            }
+            // no need to sync threads, since workgroup size == warpsize, ie 32 (TODO: AMD)
+            
+            // each thread handles ... hmmm...we'd better have 1024 threads (on NVIDIA), or 256 anyway (works also on AMD)
+            // anyway, for now, each thread handles one value of co, all values of n block, and all values of ci
+            // two loops
+            int co = tid;
+            for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
+               float sum = 0.0f;
+               #pragma unroll
+               for(int ci32=0; ci32 < 32 * 32; ci32 += 32) {
+                  sum += U_[ci32 + co] * V_[ci32 + n];
+               }
+               int offset = 0 +  // (n // 32)
+                            n * 1 * 32 * 1 * 1 * 6 * 6 + // (n % 32)
+                            0 + //  (co // 32)
+                            co * 1 * 1 * 6 * 6 + // (co % 32)
+                            0 +   // th
+                            0 +   // tw
+                            0 +   // xi
+                            0 +   // nu
+                            b +   // xinu
+                            0;
+               M[offset] = sum;
+            }
+        }
     }
 }
 // M has following dimensions:  th, tw, n // 32 n % 32, co // 32, co % 32, xi, nu
