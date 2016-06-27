@@ -281,19 +281,15 @@ def calcO(M):
     grid = (ceil_div(num_xinu_tiles, 32), 1, 1)
     block = (32, 1, 1)
 
-    call_cl_kernel(
-        k_calcO,
-        q, grid, block,
-        O_cl, M_cl,
-        num_xinu_tiles
-    )
-    q.finish()
-    timecheck('calced O_cl')
-
-    AT = np.array([[1,1,1,1,1,0],
-        [0,1,-1,2,-2,0],
-        [0,1,1,4,4,0],
-        [0,1,-1,8,-8,1]], dtype=np.float32)
+    for it in range(4):
+        call_cl_kernel(
+            k_calcO,
+            q, grid, block,
+            O_cl, M_cl,
+            num_xinu_tiles
+        )
+        q.finish()
+        timecheck('calced O_cl')
 
     cl.enqueue_copy(q, O_from_cl, O_cl)
     O_from_cl_ = O_from_cl.reshape(GK * 32, GN * 32, tiles, tiles, 4, 4).transpose(1, 2, 4, 3, 5, 0).reshape(
