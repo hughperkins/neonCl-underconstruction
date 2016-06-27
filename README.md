@@ -1,10 +1,10 @@
 # WinogradCl
 
-A port of nervana neon Kepler direct convolution kernels to OpenCL.
+A port of nervana neon to OpenCL:
+- Kepler direct convolution kernels: done :-)
+- Implementation of Winograd 4x4,3x3 in Opencl: in progress
 
 The original neon, documentation etc is at https://github.com/nervanasystems/neon
-
-Note that Kepler kernels are not the fast SASS Winograd ones, but they're fairly ok :-)
 
 ## Installation
 
