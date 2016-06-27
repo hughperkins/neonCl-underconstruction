@@ -210,3 +210,53 @@ def calcM_blocked_l1(N, Co, U, V):
     timecheck('calced M')
     return M
 
+def calcO(M):
+    N = M.shape[0]
+    Co = M.shape[1]
+    tiles = M.shape[2]
+    oH = tiles * 4  # is this always true?  anyway, it's true for now...
+    oW = tiles * 4
+
+    #oH = iH
+    #oW = iW
+
+    O = np.zeros((Co, oH, oW, N), dtype=np.float32)
+    Mfull = M
+    Ofull = O
+
+    AT = np.array([[1,1,1,1,1,0],
+        [0,1,-1,2,-2,0],
+        [0,1,1,4,4,0],
+        [0,1,-1,8,-8,1]], dtype=np.float32)
+
+    timecheck('allocated AT')
+
+    # inverse transform
+    Otmp = np.zeros((4, 6), dtype=np.float32)
+    for n in range(N):
+        for co in range(Co):
+            for th in range(tiles):
+                for tw in range(tiles):
+                    O = Ofull[co,th * 4:(th+1)*4,tw*4:(tw+1)*4,n].reshape(4,4)
+                    M = Mfull[n, co, th, tw]
+                    #print('M.shape', M.shape)
+                    #for i in range(6):
+                        #Otmp[0][i] = M[0][i] + M[1][i] + M[2][i] + M[3][i] + M[4][i]
+                        #Otmp[1][i] =         + M[1][i] - M[2][i] + 2 * M[3][i] - 2 * M[4][i]
+                        #Otmp[2][i] =         + M[1][i] + M[2][i] + 4 * M[3][i] + 4 * M[4][i]
+                        #Otmp[3][i] =         + M[1][i] - M[2][i] + 8 * M[3][i] - 8 * M[4][i] + M[5][i]
+                        #print('AT.shape', AT.shape, 'M.shape', M.shape)
+                    Otmp = AT.dot(M)
+
+                    #for i in range(4):
+                        #O[i][0] = Otmp[i][0] + Otmp[i][1] + Otmp[i][2] + Otmp[i][3] + Otmp[i][4]
+                        #O[i][1] =         + Otmp[i][1] - Otmp[i][2] + 2 * Otmp[i][3] - 2 * Otmp[i][4]
+                        #O[i][2] =         + Otmp[i][1] + Otmp[i][2] + 4 * Otmp[i][3] + 4 * Otmp[i][4]
+                        #O[i][3] =         + Otmp[i][1] - Otmp[i][2] + 8 * Otmp[i][3] - 8 * Otmp[i][4] + Otmp[i][5]
+                        #print('O.shape', O.shape, 'Otmp.shape', Otmp.shape, 'AT.T.shape', AT.T.shape)
+                    #print('O.shape', O.shape)
+                    #print('Otmp.dot(AT.T).shape', Otmp.dot(AT.T).shape)
+                    O[:] = Otmp.dot(AT.T)
+    timecheck('calced O')
+    return Ofull
+
