@@ -206,9 +206,9 @@ def calcM(N, Co, U, V):
 
     # new layouts:
     # U
-    # [xi, nu, Co // 32, Ci, Co % 32]
+    # [xi, nu, co // 32,         ci, co % 32]
     # V
-    # [xi, nu, n // 32, th, tw, ci, n % 32]
+    # [xi, nu,  n // 32, th, tw, ci,  n % 32]
 
     M_cpu_blocked_l1 = winograd_cpu.calcM_blocked_l1(N=N, Co=Co, U=U, V=V)
     assert np.allclose(M_cpu, M_cpu_blocked_l1, atol=1e-3)

@@ -304,45 +304,68 @@ def fprop_calcM(ctx):
     # block: (32, 1, 1)   # each thread used for different Ci value
     code = r"""
 void process_ci_block(
-    private float sums [6][6],
     global float *restrict M, global float *restrict U, global float *restrict V,
-        int gci, int gk, int gn, int th_tw) {
-    // load the block first... need somewhere to store it first
-    // each thead handles one co values, and all x/y values
-    
-    // first download the data, into shared memory
-    // we have to donwload:
-    // U
-    // V
+        int Ci, int gci, int gk, int gn, int th_tw) {
 
+    // each workgroup handles:
+    // 32 values for Co
+    // some values for Ci (up to 512?)
+    // pull down in blocks of 32 * 4 = 128 floats at a time
+    // assume that only hav eup to Ci == 128 for now (add an extra loop later)
+    local float4 U4_[32 * 32];
+    local float4 V4_[32];
+    // int numVRounds = Ci >> (5+2);  // +2 is because we are going to use float4s
     int tid = get_local_id(0);
-    // U first
-    local float4 U4[6*6*32];
-    local float *U_ = (local float *)U4; // block of 4 ci values at a time??? If too much, we lose occupancy...
-    int offset = gci << 2 ;
-    #pragma unroll
-    for(int i = 0; i < 6*6*32; i+= 32) {
-        U4[tid + i] = U[offset + tid + i];
-    }
-    // no need for sync, since num workgroup threads == warpsize
-    
-    // each thread handles one value of co, for each of the other values
-//    for(int ci=0; ci < 4; ci++) {
- //      for(int xi=0; xi < 6; xi++) {
-  //         #pragma unroll
-   //        for(int nu=0; nu < 6; nu++) {
-    //           U_[ci][xi][nu][tid] = U[
-     //      }
-      // }
-    //}
 
-    // now process it
-    for(int xi=0; xi < 6; xi++) {
-        for(int nu=0; nu < 6; nu++) {
-           for(int ci=0; ci < 4; ci++) {
-           }
-        }
+    int localCi = Ci - (gci << 128);
+
+    int V_offset = 0; // TODO
+    float4 V_value = V[V_offset + tid];
+    int U_offset = tid;
+    global float4 *restrict U4 = (global float4 *)U;
+    for(int i = 0; i < 8; i+= 1) {
+        // there are: 128 * 32 = 4096 floats
+        // or: 32 * 32 = 1024 float4's
+        // divided by 32 threads, 32 float4's per thread
+        // or 128 floats per thread
+        // each loop the 32 threads get 128 float4's, or 512 floats
+        // after 8 runs through the loop, it has fetchs 1024 float4's
+        int U_offset0 = U_offset + 0;
+        int U_offset1 = U_offset + 32;
+        int U_offset2 = U_offset + 64;
+        int U_offset3 = U_offset + 96;
+
+        float4 b0 = U_offset0 < localCi ? U4[U_offset0] : 0.0f;
+        float4 b1 = U_offset0 < localCi ? U4[U_offset1] : 0.0f;
+        float4 b2 = U_offset0 < localCi ? U4[U_offset2] : 0.0f;
+        float4 b3 = U_offset0 < localCi ? U4[U_offset3] : 0.0f;
+
+        U4_[U_offset0] = b0;
+        U4_[U_offset1] = b1;
+        U4_[U_offset2] = b2;
+        U4_[U_offset3] = b3;
+
+        U_offset += 128;
     }
+    V4_[tid] = V_value;
+    // no need to sync, since workgroup is 32 threads, equals warpsize (whether this is a good
+    // idea, I'm not sure, but worth a shot...)
+
+    // now, all data should have been loaded
+    // each thread will sum across all values of ci, for one particular value of co
+
+    local float * restrict U_ = (local float * restrict)U4_;
+    local float * restrict V_ = (local float * restrict)V4_;
+
+    float sum = 0;
+    for(int ci = 0; ci < Ci; ci += 4) {
+        //float s0 = U_[(ci << 5) + tid] * V_
+        
+        //s0 += s1;
+        //s2 += s3;
+        //sum = s0 + s2;
+    }
+
 }
 
 kernel void fprop_calcM(global float *restrict M, const global float *restrict U, const global float *restrict V,
@@ -354,9 +377,9 @@ kernel void fprop_calcM(global float *restrict M, const global float *restrict U
     //int th = th_tw >> 3;
     //int tw = th_tw & 0x7;
 
-    private sums[6][6];
+    //private sums[6][6];
     for(int gci = 0; gci < GCi; gci++) {
-        process_ci_block(sums, M, U, V, gci, gk, gn, th_tw);
+        process_ci_block(M, U, V, Ci, gci, gk, gn, th_tw);
     }
 }
     """
