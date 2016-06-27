@@ -64,11 +64,11 @@ def printTensor(t):
                line += '%.1f ' % t[i][x][y]
             print(line)
 
-def calcU(q, W):
-    Ci = W.shape[0]
-    kH = W.shape[1]
-    kW = W.shape[2]
-    Co = W.shape[3]
+def calcU(q, W_shape, W_cl, U_cl):
+    Ci = W_shape[0]
+    kH = W_shape[1]
+    kW = W_shape[2]
+    Co = W_shape[3]
 
     # this is adapted from neon's winograd_conv.py:
     GK   = ceil_div(Co, 32)
@@ -76,46 +76,45 @@ def calcU(q, W):
     filter_size   = 1152*Ci*GK
     grid = (GK, Ci, 1)
     block = (32, 1, 1)
-    W_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=W)
-    U_from_cl = np.zeros((filter_size,), dtype=np.float32)
-    print('size U_from_cl', U_from_cl.size)
-    U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U_from_cl)
-    q.finish()
-    timecheck('created U_cl buffers')
+    # W_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=W)
+    #U_from_cl = np.zeros((filter_size,), dtype=np.float32)
+    #print('size U_from_cl', U_from_cl.size)
+    #U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U_from_cl)
+    #q.finish()
+    #timecheck('created U_cl buffers')
     
-    for it in range(4):
-        call_cl_kernel(
-            k_calcU,
-            q, grid, block,
-            U_cl, W_cl,
-            kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152,
-            Ci, GK)
-        print('Ci', Ci, 'Co', Co, 'W.shape', W.shape, 'W.size', W.size, 'U_from_cl.size', U_from_cl.size)
-        q.finish()
-        timecheck('calced U_cl')
-    cl.enqueue_copy(q, U_from_cl, U_cl)
+    call_cl_kernel(
+        k_calcU,
+        q, grid, block,
+        U_cl, W_cl,
+        kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152,
+        Ci, GK)
+    # print('Ci', Ci, 'Co', Co, 'W.shape', W_shape)
+    q.finish()
+    timecheck('calced U_cl')
+    #cl.enqueue_copy(q, U_from_cl, U_cl)
     #print('GK', GK, 'Ci', Ci, 'filter_size', filter_size, 'U_from_cl.size', U_from_cl.size)
-    U_from_cl = U_from_cl.reshape(6,6,GK,Ci,32)#[:Co,:,:,0]
+    #U_from_cl = U_from_cl.reshape(6,6,GK,Ci,32)#[:Co,:,:,0]
     #U_from_cl = np.transpose(U_from_cl, [2,3,0,4,1]).reshape(6, 6, GK * 32, Ci)[:,:,:Co,:]
     # assert np.allclose(U_from_cl, U2, atol=1e-4)
 
     # layout
     # [xi, nu, Co // 32, Ci, Co % 32]
 
-    U_from_cpu = winograd_cpu.calcU(W=W)
-    U_from_cl_ = U_from_cl.transpose(0,1,2,4,3).reshape(6,6,GK * 32,Ci)[:,:,:Co,:]
+    #U_from_cpu = winograd_cpu.calcU(W=W)
+    #U_from_cl_ = U_from_cl.transpose(0,1,2,4,3).reshape(6,6,GK * 32,Ci)[:,:,:Co,:]
 
-    assert np.allclose(U_from_cl_, U_from_cpu, atol=1e-4)
+    #assert np.allclose(U_from_cl_, U_from_cpu, atol=1e-4)
 
-    return U_from_cl
+    #return U_from_cl
     #return U_from_cpu
 
-def calcV(I):
-    Ifull = I
-    Ci = I.shape[0]
-    iH = I.shape[1]
-    iW = I.shape[2]
-    N = I.shape[3]
+def calcV(I_shape, I_cl, V_cl):
+    #Ifull = I
+    Ci = I_shape[0]
+    iH = I_shape[1]
+    iW = I_shape[2]
+    N = I_shape[3]
     tiles = iW // 4
 
     oH = iH
@@ -150,66 +149,65 @@ def calcV(I):
     div_GXS2 = get_div_mul_shift_64(GXS2)
 
     image_size = 1152*Ci*GXS*GYS*GN
-    V_from_cl = np.zeros((image_size,), dtype=np.float32)
-    I_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=I)
-    V_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=V_from_cl)
-    q.finish()
-    timecheck('allocated V_cl buffers')
+    #V_from_cl = np.zeros((image_size,), dtype=np.float32)
+    #I_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=I)
+    #V_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=V_from_cl)
+    #q.finish()
+    #timecheck('allocated V_cl buffers')
 
     grid = (GN, GYS*GXS, Ci)
     block = (32, 1, 1)
 
-    for it in range(4):
-        call_cl_kernel(
-            k_calcV,
-            q, grid, block,
-            V_cl, I_cl,
-            
-            iH, iW, N, padH, padW,
-            GXS, GYS2, GXS2, div_GXS2[0], div_GXS2[1],
-            shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
-            iH * iW * N, iW * N, GYS*GXS*Ci*1152, GXS * Ci * 1152, Ci * 1152,
-            GXS, GXS * GYS, GN, Ci)
-        q.finish()
-        timecheck('calced V_cl')
+    call_cl_kernel(
+        k_calcV,
+        q, grid, block,
+        V_cl, I_cl,
+        
+        iH, iW, N, padH, padW,
+        GXS, GYS2, GXS2, div_GXS2[0], div_GXS2[1],
+        shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
+        iH * iW * N, iW * N, GYS*GXS*Ci*1152, GXS * Ci * 1152, Ci * 1152,
+        GXS, GXS * GYS, GN, Ci)
+    q.finish()
+    timecheck('calced V_cl')
 
-    cl.enqueue_copy(q, V_from_cl, V_cl)
-    print('image_size', image_size)
-    print('GXS', GXS, 'GYS', GYS, 'GN', GN, 'Ci', Ci)
-    V_from_cl = V_from_cl.reshape(6,6,GYS,GXS,GN,Ci,32)
+    #cl.enqueue_copy(q, V_from_cl, V_cl)
+    #print('image_size', image_size)
+    #print('GXS', GXS, 'GYS', GYS, 'GN', GN, 'Ci', Ci)
+    #V_from_cl = V_from_cl.reshape(6,6,GYS,GXS,GN,Ci,32)
     # [xi, nu, n // 32, th, tw, ci, n % 32]
 
-    V_from_cpu = winograd_cpu.calcV(I=I)
+    #V_from_cpu = winograd_cpu.calcV(I=I)
     # [n, xi, nu, ci, th, tw]]
 
-    V_from_cl_ = V_from_cl.transpose(
-        2,6,0,1,5,3,4).reshape(
-        GN * 32, 6, 6, Ci, tiles, tiles)[:N]
+    #V_from_cl_ = V_from_cl.transpose(
+    #    2,6,0,1,5,3,4).reshape(
+    #    GN * 32, 6, 6, Ci, tiles, tiles)[:N]
 
     #V_from_cl = np.transpose(V_from_cl, [2, 6, 4, 5, 3, 0, 1])
     #V_from_cl = V_from_cl.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
 
-    assert np.allclose(V_from_cl_, V_from_cpu, atol=1e-4)
+    #assert np.allclose(V_from_cl_, V_from_cpu, atol=1e-4)
 
-    return V_from_cl
+    #return V_from_cl
 
-def calcM(N, Co, U, V):
+def calcM(N, Co, M_cl, U_shape, U_cl, V_shape, V_cl):
     # U_from_cl.reshape(GK,Ci,6,6,32)  6,6,GK,Ci,32
-    print('U.shape', U.shape)
-    Co = (U.shape[2] - 1) * 32 + U.shape[4]
-    Ci = U.shape[3]
+    #print('U.shape', U.shape)
+    Co = (U_shape[2] - 1) * 32 + U_shape[4]
+    Ci = U_shape[3]
     GK   = ceil_div(Co, 32)
-    tiles = V.shape[4]
-    GN = V.shape[2]
-    print('GK', GK, 'GN', GN, 'tiles', tiles, 'Co', Co, 'Ci', Ci)
+    tiles = V_shape[4]
+    GN = V_shape[2]
+    #print('GK', GK, 'GN', GN, 'tiles', tiles, 'Co', Co, 'Ci', Ci)
 
     # M_from_cl = np.zeros((GK * 32 * GN * 32 * tiles * tiles * 6 * 6,), dtype=np.float32)
-    M_from_cl = np.zeros((GN, 32, GK, 32, tiles, tiles, 6, 6,), dtype=np.float32)
-    U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U)
-    V_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=V)
-    M_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=M_from_cl)
-    q.finish()
-    timecheck('allocated M_cl buffers')
+    #M_from_cl = np.zeros((GN, 32, GK, 32, tiles, tiles, 6, 6,), dtype=np.float32)
+    #U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U)
+    #V_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=V)
+    #M_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=M_from_cl)
+    #q.finish()
+    #timecheck('allocated M_cl buffers')
 
     # grid = (GN, GYS*GXS, Ci)
     grid = (1,1,1) # for now...
@@ -224,23 +222,13 @@ def calcM(N, Co, U, V):
     q.finish()
     timecheck('calced M_cl')
 
-    for it in range(3):
-        call_cl_kernel(
-            k_calcM,
-            q, grid, block,
-            M_cl, U_cl, V_cl,
-            
-            Ci, 1)
-        q.finish()
-        timecheck('calced M_cl')
+    #cl.enqueue_copy(q, M_from_cl, M_cl)
 
-    cl.enqueue_copy(q, M_from_cl, M_cl)
+    #M_cpu = winograd_cpu.calcM(N=N, Co=Co, U=U, V=V)
 
-    M_cpu = winograd_cpu.calcM(N=N, Co=Co, U=U, V=V)
+    #M_from_cl_ = M_from_cl.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6)
 
-    M_from_cl_ = M_from_cl.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6)
-
-    assert np.allclose(M_cpu, M_from_cl_, atol=1e-3)
+    #assert np.allclose(M_cpu, M_from_cl_, atol=1e-3)
 
     # old layouts:
     # U                           Co // 32,       Ci,    6,   6, Co % 32
@@ -254,50 +242,49 @@ def calcM(N, Co, U, V):
     # V
     # [xi, nu,  n // 32, th, tw, ci,  n % 32]
 
-    M_cpu_blocked_l1 = winograd_cpu.calcM_blocked_l1(N=N, Co=Co, U=U, V=V)
-    assert np.allclose(M_cpu, M_cpu_blocked_l1, atol=1e-3)
+    #M_cpu_blocked_l1 = winograd_cpu.calcM_blocked_l1(N=N, Co=Co, U=U, V=V)
+    #assert np.allclose(M_cpu, M_cpu_blocked_l1, atol=1e-3)
 
-    return M_from_cl
+    #return M_from_cl
 
-def calcO(M):
-    print('M.shape', M.shape)
+def calcO(O_cl, M_shape, M_cl):
+    #print('M.shape', M.shape)
 
-    GK = M.shape[2]
-    GN = M.shape[0]
-    tiles = M.shape[4]
+    GK = M_shape[2]
+    GN = M_shape[0]
+    tiles = M_shape[4]
 
-    print('GK', GK, 'GN', GN, 'tiles', tiles)
-    O_from_cpu = winograd_cpu.calcO(M=M.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6))
+    #print('GK', GK, 'GN', GN, 'tiles', tiles)
+    #O_from_cpu = winograd_cpu.calcO(M=M.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6))
 
-    M_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=M)
+    #M_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=M)
 
-    O_from_cl = np.zeros((GN, 32, GK, 32, tiles, tiles, 4, 4,), dtype=np.float32)
-    M_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=M)
-    O_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=O_from_cl)
-    q.finish()
-    timecheck('allocated O_cl buffers')
+    #O_from_cl = np.zeros((GN, 32, GK, 32, tiles, tiles, 4, 4,), dtype=np.float32)
+    #M_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=M)
+    #O_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=O_from_cl)
+    #q.finish()
+    #timecheck('allocated O_cl buffers')
 
     num_xinu_tiles = GK * 32 * GN * 32 * tiles * tiles
     grid = (ceil_div(num_xinu_tiles, 32), 1, 1)
     block = (32, 1, 1)
 
-    for it in range(4):
-        call_cl_kernel(
-            k_calcO,
-            q, grid, block,
-            O_cl, M_cl,
-            num_xinu_tiles
-        )
-        q.finish()
-        timecheck('calced O_cl')
+    call_cl_kernel(
+        k_calcO,
+        q, grid, block,
+        O_cl, M_cl,
+        num_xinu_tiles
+    )
+    q.finish()
+    timecheck('calced O_cl')
 
-    cl.enqueue_copy(q, O_from_cl, O_cl)
-    O_from_cl_ = O_from_cl.reshape(GK * 32, GN * 32, tiles, tiles, 4, 4).transpose(1, 2, 4, 3, 5, 0).reshape(
-        GK * 32, tiles * 4, tiles * 4, GN * 32)
+    #cl.enqueue_copy(q, O_from_cl, O_cl)
+    #O_from_cl_ = O_from_cl.reshape(GK * 32, GN * 32, tiles, tiles, 4, 4).transpose(1, 2, 4, 3, 5, 0).reshape(
+    #    GK * 32, tiles * 4, tiles * 4, GN * 32)
 
-    assert np.allclose(O_from_cpu, O_from_cl_, atol=1e-3)
+    #assert np.allclose(O_from_cpu, O_from_cl_, atol=1e-3)
 
-    return O_from_cpu
+    #return O_from_cpu
 
 def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     inittime()
@@ -305,6 +292,27 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 
     oH = iH
     oW = iW
+    
+    tiles = iW // 4
+
+    shlN = 5
+    shlY, shlX, maskY, shrY, maskX, shrX, maskN, supY, supX = {
+        0 : (4, 5, 0x18, 3, 0x07, 0, 0x00, 0x203, 0x300), # 4x8  yyxxx
+        1 : (4, 4, 0x18, 3, 0x06, 1, 0x01, 0x203, 0x201), # 4x4  yyxxn
+        2 : (3, 4, 0x10, 4, 0x0c, 2, 0x03, 0x104, 0x202), # 2x4  yxxnn
+        3 : (2, 4, 0x00, 0, 0x18, 3, 0x07, 0x000, 0x203), # 1x4  xxnnn
+        4 : (2, 3, 0x00, 0, 0x10, 4, 0x0f, 0x000, 0x104), # 1x2  xnnnn
+        5 : (2, 2, 0x00, 0, 0x00, 0, 0x1f, 0x000, 0x000), # 1x1  nnnnn
+    }.get(shlN)
+
+    GYS  = ceil_div(oH, 1 << shlY)
+    GXS  = ceil_div(oW, 1 << shlX)
+    GN   = ceil_div(N, 1 << shlN)
+    # GK   = ceil_div(Co, 32)
+    GYS2 = GYS // 2
+    GXS2 = GXS  * 2
+
+    GK   = ceil_div(Co, 32)
 
     W = np.random.randn(Ci,kH,kW,Co).astype(np.float32)
 
@@ -313,11 +321,47 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 
     print('Co', Co, 'iH', iH, 'iW', iW, 'N', N)
 
-    U = calcU(q=q, W=W)
-    V = calcV(I=I)
-    M = calcM(N=N, Co=Co, U=U, V=V)
+    W_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=W)
+    I_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=I)
 
-    O = calcO(M=M)
+    # filter_size   = 1152*Ci*GK
+    U = np.zeros((6, 6, GK, Ci, 32,), dtype=np.float32)
+    # print('size U_from_cl', U_from_cl.size)
+    U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U)
+
+    #image_size = 1152*Ci*GXS*GYS*GN
+    V = np.zeros((GXS, GYS, Ci, 32, 6, 6), dtype=np.float32)
+    #I_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=I)
+    V_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=V)
+
+    M = np.zeros((GN, 32, GK, 32, tiles, tiles, 6, 6,), dtype=np.float32)
+    M_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=M)
+
+    O = np.zeros((GN, 32, GK, 32, tiles, tiles, 4, 4,), dtype=np.float32)
+    O_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=O)
+
+    q.finish()
+    print('allocated buffers')
+    start = time.time()
+
+    for it in range(3):
+        calcU(q=q, U_cl=U_cl, W_shape=W.shape, W_cl=W_cl)
+        calcV(V_cl=V_cl, I_shape=I.shape, I_cl=I_cl)
+        calcM(N=N, Co=Co, M_cl=M_cl, U_shape=U.shape, U_cl=U_cl, V_shape=V.shape, V_cl=V_cl)
+
+        calcO(O_cl=O_cl, M_shape=M.shape, M_cl=M_cl)
+
+        q.finish()
+        end = time.time()
+        print('calcs done')
+        print('time for all calcs:', end - start)
+
+    cl.enqueue_copy(q, O, O_cl)
+
+    O = O.transpose(2,3, 4,6, 5,7, 0,1).reshape(
+        GK * 32, tiles * 4, tiles * 4, GN * 32)
+    print('O.shape', O.shape)
+    # O = O.reshape(GN * 32, GK * 32, til
 
     return {'W': W, 'O': O, 'I': I}
 
