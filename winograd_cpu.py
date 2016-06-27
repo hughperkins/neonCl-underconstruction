@@ -203,15 +203,14 @@ def calcM_blocked_l1(N, Co, U, V):
                     M_block = M[N_block, :, Co_block, :, th, tw]
                     for mh in range(6):
                         for mw in range(6):
-                            for n_local in range(N_blocksize):
-                               left = U_block[mh,mw]
-                               right = V_block[mh,mw,:,n_local]
-                               if not printed_size:
-                                   printed_size = True
-                                   print('left.shape', left.shape, 'right.shape', right.shape)
-                               src = calcM_blocked_l2(left, right, ([0], [0]))
-                               dst = M_block[n_local, :, mh, mw]
-                               dst[:] = src
+                           left = U_block[mh,mw]
+                           right = V_block[mh,mw]
+                           if not printed_size:
+                               printed_size = True
+                               print('left.shape', left.shape, 'right.shape', right.shape)
+                           src = calcM_blocked_l2(left, right, ([0], [0]))
+                           dst = M_block[:, :, mh, mw]
+                           dst[:] = src.T
     M = M.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6)
     M = M[:N, :Co]
     timecheck('calced M')
