@@ -370,62 +370,68 @@ void process_ci_block_too_complicated_do_simple_for_now(
 
 void process_ci_block(
     global float *restrict M, global float *restrict U, global float *restrict V,
-        int Ci, int gci, int gk, int gn, int th_tw) {
+        int Ci, int gci, int gk, int gn, int th_tw,
+        local float *U_, local float *V_) {
     // handles a block of all Ci (U and V), 32 co values (U), 32 n values (V)
     // saves the results up to M
     // for now, let's do simple and stupid, no float4s or anything, just get something working :-P
     // also, dont worry about register spills, occupancy etc ...
 
-    local float U_[32 * 32]; // do 32 values of ci at a time; and since we're trying to keep it simple
+    //local float U_[Ci * 32]; // do 32 values of ci at a time; and since we're trying to keep it simple
                             // lets assume that Ci, N and Co are all exactly 32
                             // image size should be 4, ie no tiling
-    local float V_[32 * 32];
+    //local float V_[Ci * 32];
     int tid = get_local_id(0);
     // use tid for ci
-    int ci = tid;
-    int ci32 = ci << 5;
     // stupidly loop over xi and nu for now, to at least get a baseline time, which we can improve a bit...
     int xinu_U_stride = 1 * Ci * 32;  // assuming all 32 for now :-P
     int xinu_V_stride = 1 * 1 * 1 * Ci * 32;  // assuming 32 again
+    int ci_loops = (Ci + 31) >> 5;
     for(int xi = 0; xi < 6; xi++) {
         for(int nu=0; nu < 6; nu++) {
             int b = xi * 6 + nu;
-            for(int co = 0; co < 32; co++) {
-                // just copy directly, ignore latency hiding for now
-                U_[ci32 + co] = U[b * xinu_U_stride + ci32 + co];
-            }
-            for(int n = 0; n < 32; n++) {
-                // just copy directly, ignore latency hiding for now
-                V_[ci32 + n] = V[b * xinu_V_stride + ci32 + n];
-            }
-            // no need to sync threads, since workgroup size == warpsize, ie 32 (TODO: AMD)
-            
-            // each thread handles ... hmmm...we'd better have 1024 threads (on NVIDIA), or 256 anyway (works also on AMD)
-            // anyway, for now, each thread handles one value of co, all values of n block, and all values of ci
-            // two loops
-            int co = tid;
-            for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
-               float sum = 0.0f;
-               #pragma unroll
-               for(int ci = 0; ci < Ci; ci++) {
-                  int ci32 = ci << 5;
-                  float value = U_[ci32 + co] * V_[ci32 + n];
-                  sum += value;
-               }
-               //for(int ci32=0; ci32 < 32 * 32; ci32 += 32) {
-               //   sum += U_[ci32 + co] * V_[ci32 + n];
-               //}
-               int offset = 0 +  // (n // 32)
-                            n * 1 * 32 * 1 * 1 * 6 * 6 + // (n % 32)
-                            0 + //  (co // 32)
-                            co * 1 * 1 * 6 * 6 + // (co % 32)
-                            0 +   // th
-                            0 +   // tw
-                            0 +   // xi
-                            0 +   // nu
-                            b +   // xinu
-                            0;
-               M[offset] = sum;
+            for(int ci_loop=0; ci_loop < ci_loops; ci_loop++) {
+                int ci = tid + (ci_loop << 5);
+                int ci32 = ci << 5;
+                if(ci < Ci) {
+                    for(int co = 0; co < 32; co++) {
+                        // just copy directly, ignore latency hiding for now
+                        U_[ci32 + co] = U[b * xinu_U_stride + ci32 + co];
+                    }
+                    for(int n = 0; n < 32; n++) {
+                        // just copy directly, ignore latency hiding for now
+                        V_[ci32 + n] = V[b * xinu_V_stride + ci32 + n];
+                    }
+                }
+                // no need to sync threads, since workgroup size == warpsize, ie 32 (TODO: AMD)
+                
+                // each thread handles ... hmmm...we'd better have 1024 threads (on NVIDIA), or 256 anyway (works also on AMD)
+                // anyway, for now, each thread handles one value of co, all values of n block, and all values of ci
+                // two loops
+                int co = tid;
+                for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
+                   float sum = 0.0f;
+                   #pragma unroll
+                   for(int ci = 0; ci < Ci; ci++) {
+                      int ci32 = ci << 5;
+                      float value = U_[ci32 + co] * V_[ci32 + n];
+                      sum += value;
+                   }
+                   //for(int ci32=0; ci32 < 32 * 32; ci32 += 32) {
+                   //   sum += U_[ci32 + co] * V_[ci32 + n];
+                   //}
+                   int offset = 0 +  // (n // 32)
+                                n * 1 * 32 * 1 * 1 * 6 * 6 + // (n % 32)
+                                0 + //  (co // 32)
+                                co * 1 * 1 * 6 * 6 + // (co % 32)
+                                0 +   // th
+                                0 +   // tw
+                                0 +   // xi
+                                0 +   // nu
+                                b +   // xinu
+                                0;
+                   M[offset] = sum;
+                }
             }
         }
     }
@@ -436,7 +442,8 @@ void process_ci_block(
 // [n//32][n % 32][co // 32][co % 32][th][tw][xi][nu]
 
 kernel void calcM(global float *restrict M, const global float *restrict U, const global float *restrict V,
-        int Ci, int GCi
+        int Ci, int GCi,
+        local float *U_, local float *V_
     ) {
     int gk = get_group_id(0);
     int gn = get_group_id(1);
@@ -446,7 +453,7 @@ kernel void calcM(global float *restrict M, const global float *restrict U, cons
 
     //private sums[6][6];
     //for(int gci = 0; gci < GCi; gci++) {
-        process_ci_block(M, U, V, Ci, 0, 0, 0, 0);  // we are assuming Ci, N, Co are 32; image_size is 4 (no tiling)
+        process_ci_block(M, U, V, Ci, 0, 0, 0, 0, U_, V_);  // we are assuming Ci, N, Co are 32; image_size is 4 (no tiling)
                                                     // will generalize later
                                                     // also, ignore xi and nu for now, just calc one value for each xi/nu tile...
     //}

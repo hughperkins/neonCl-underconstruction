@@ -213,7 +213,8 @@ def calcM(N, Co, M_cl, U_shape, U_cl, V_shape, V_cl):
         q, grid, block,
         M_cl, U_cl, V_cl,
         
-        Ci, 1)
+        Ci, 1,
+        cl.LocalMemory(Ci * 32 * 4), cl.LocalMemory(Ci * 32 * 4))
     q.finish()
     timecheck('calced M_cl')
 
@@ -397,7 +398,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 def simple1():
     image_size = 4
     N = 4
-    Ci = 4
+    Ci = 128
     Co = 4
  
     start = time.time()
