@@ -213,7 +213,7 @@ def calcM(N, Co, M_cl, U_shape, U_cl, V_shape, V_cl):
         q, grid, block,
         M_cl, U_cl, V_cl,
         
-        Ci, 1,
+        Ci, 1, tiles, GN,
         cl.LocalMemory(Ci * 32 * 4), cl.LocalMemory(Ci * 32 * 4))
     q.finish()
     timecheck('calced M_cl')
@@ -315,7 +315,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     I = np.zeros((Ci,iH, iW,N), dtype=np.float32)
     I[:] = np.random.randn(*I.shape)
 
-    print('Co', Co, 'iH', iH, 'iW', iW, 'N', N)
+    print('Co', Co, 'iH', iH, 'iW', iW, 'N', N, 'tiles', tiles)
 
     W_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=W)
     I_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=I)
@@ -396,9 +396,9 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     return {'W': W, 'O': O, 'I': I}
 
 def simple1():
-    image_size = 4
+    image_size = 16
     N = 4
-    Ci = 128
+    Ci = 4
     Co = 4
  
     start = time.time()

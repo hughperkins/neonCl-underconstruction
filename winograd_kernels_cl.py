@@ -370,7 +370,7 @@ void process_ci_block_too_complicated_do_simple_for_now(
 
 void process_ci_block(
     global float *restrict M, global float *restrict U, global float *restrict V,
-        int Ci, int gci, int gk, int gn, int th_tw,
+        int Ci, int tiles, int GN, int gci, int gk, int gn, int th_tw,
         local float *U_, local float *V_) {
     // handles a block of all Ci (U and V), 32 co values (U), 32 n values (V)
     // saves the results up to M
@@ -385,8 +385,13 @@ void process_ci_block(
     // use tid for ci
     // stupidly loop over xi and nu for now, to at least get a baseline time, which we can improve a bit...
     int xinu_U_stride = 1 * Ci * 32;  // assuming all 32 for now :-P
-    int xinu_V_stride = 1 * 1 * 1 * Ci * 32;  // assuming 32 again
+    int xinu_V_stride = 1 * tiles * tiles * Ci * 32;  // assuming 32 again
     int ci_loops = (Ci + 31) >> 5;
+    // just going to loop stupidly over tiles for now.  will at least have some easy low-hanging fruit
+    // when start optimizing...
+    for(int th = 0; th < tiles; th++) {
+    for(int tw = 0; tw < tiles; tw++) {
+    int tiles_offset = (th * tiles + tw) * Ci * 32;
     for(int xi = 0; xi < 6; xi++) {
         for(int nu=0; nu < 6; nu++) {
             int b = xi * 6 + nu;
@@ -400,7 +405,7 @@ void process_ci_block(
                     }
                     for(int n = 0; n < 32; n++) {
                         // just copy directly, ignore latency hiding for now
-                        V_[ci32 + n] = V[b * xinu_V_stride + ci32 + n];
+                        V_[ci32 + n] = V[tiles_offset + b * xinu_V_stride + ci32 + n];
                     }
                 }
                 // no need to sync threads, since workgroup size == warpsize, ie 32 (TODO: AMD)
@@ -421,11 +426,11 @@ void process_ci_block(
                    //   sum += U_[ci32 + co] * V_[ci32 + n];
                    //}
                    int offset = 0 +  // (n // 32)
-                                n * 1 * 32 * 1 * 1 * 6 * 6 + // (n % 32)
+                                n * 1 * 32 * tiles * tiles * 6 * 6 + // (n % 32)
                                 0 + //  (co // 32)
-                                co * 1 * 1 * 6 * 6 + // (co % 32)
-                                0 +   // th
-                                0 +   // tw
+                                co * tiles * tiles * 6 * 6 + // (co % 32)
+                                th * tiles * 6 * 6 +   // th
+                                tw * 6 * 6 +   // tw
                                 0 +   // xi
                                 0 +   // nu
                                 b +   // xinu
@@ -435,6 +440,8 @@ void process_ci_block(
             }
         }
     }
+    }
+    }
 }
 // M has following dimensions:  th, tw, n // 32 n % 32, co // 32, co % 32, xi, nu
 // we should probalby put xi, nu innermost?  then tiles next (so we can create whole images), then rest
@@ -442,7 +449,7 @@ void process_ci_block(
 // [n//32][n % 32][co // 32][co % 32][th][tw][xi][nu]
 
 kernel void calcM(global float *restrict M, const global float *restrict U, const global float *restrict V,
-        int Ci, int GCi,
+        int Ci, int GCi, int tiles, int GN,
         local float *U_, local float *V_
     ) {
     int gk = get_group_id(0);
@@ -453,7 +460,7 @@ kernel void calcM(global float *restrict M, const global float *restrict U, cons
 
     //private sums[6][6];
     //for(int gci = 0; gci < GCi; gci++) {
-        process_ci_block(M, U, V, Ci, 0, 0, 0, 0, U_, V_);  // we are assuming Ci, N, Co are 32; image_size is 4 (no tiling)
+        process_ci_block(M, U, V, Ci, tiles, GN, 0, 0, 0, 0, U_, V_);  // we are assuming Ci, N, Co are 32; image_size is 4 (no tiling)
                                                     // will generalize later
                                                     // also, ignore xi and nu for now, just calc one value for each xi/nu tile...
     //}
