@@ -242,7 +242,7 @@ kernel void calcV(
     int out_offset = tid +                      // N % 32
                      (c << 5) +                 // ci
                      blkYX * (C << 5) +            // th* tiles + tw (?)
-                     0 *((2 - gy) * 3 + (2 - gx)) * (C << 5) +            // th* tiles + tw (?)
+                     // 0 *((2 - gy) * 3 + (2 - gx)) * (C << 5) +            // th* tiles + tw (?)
                      blkN * GY_GX * (C << 5)  //   N // 32
                      ;
     // int out_offset = blkN*GYS_GXS_C_1152 + gy*GXS_C_1152 + gx*C_1152 + c*1152 + tid;
@@ -272,6 +272,9 @@ kernel void calcV(
     //Out[0] = get_num_groups(1);
     //Out[get_group_id(1) + 1] = (float)gy;
     //Out[get_group_id(1) + 10] = (float)gx;
+    //if(get_local_id(0) == 0) {
+    //    Out[get_group_id(2)] = get_group_id(2);
+    //}
 }
 """
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
@@ -384,27 +387,14 @@ void process_ci_block(
     global float *restrict M, global float *restrict U, global float *restrict V,
         int Ci, int tiles, int GN, int b, int gci, int gk, int gn, int th_tw,
         local float *U_, local float *V_) {
-    // handles a block of all Ci (U and V), 32 co values (U), 32 n values (V)
-    // saves the results up to M
     // for now, let's do simple and stupid, no float4s or anything, just get something working :-P
     // also, dont worry about register spills, occupancy etc ...
 
-    //local float U_[Ci * 32]; // do 32 values of ci at a time; and since we're trying to keep it simple
-                            // lets assume that Ci, N and Co are all exactly 32
-                            // image size should be 4, ie no tiling
-    //local float V_[Ci * 32];
     int tid = get_local_id(0);
-    // use tid for ci
     // stupidly loop over xi and nu for now, to at least get a baseline time, which we can improve a bit...
     int xinu_U_stride = 1 * Ci * 32;  // assuming all 32 for now :-P
     int xinu_V_stride = 1 * tiles * tiles * Ci * 32;  // assuming 32 again
-    // loop stupidly over ci loops too...
     int Ci_blocks = (Ci + 31) >> 5;  // blocks of 32 for now, keep it simple
-    //int ci_loops = (Ci + 31) >> 5;
-    // just going to loop stupidly over tiles for now.  will at least have some easy low-hanging fruit
-    // when start optimizing...
-    //for(int th = 0; th < tiles; th++) {
-    //for(int tw = 0; tw < tiles; tw++) {
     int tiles_offset = b * Ci * 32;
     for(int xi = 0; xi < 6; xi++) {
         for(int nu=0; nu < 6; nu++) {
@@ -474,12 +464,9 @@ kernel void calcM(global float *restrict M, const global float *restrict U, cons
     int gk = get_group_id(0);
     int gn = get_group_id(1);
     int th_tw = get_group_id(2);
-    //int th = th_tw >> 3;
-    //int tw = th_tw & 0x7;
     
     int b = get_group_id(0);
 
-    //private sums[6][6];
     //for(int gci = 0; gci < GCi; gci++) {
         process_ci_block(M, U, V, Ci, tiles, GN, b, 0, 0, 0, 0, U_, V_);  // we are assuming Ci, N, Co are 32; image_size is 4 (no tiling)
                                                     // will generalize later
