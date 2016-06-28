@@ -386,7 +386,9 @@ void process_ci_block(
     // stupidly loop over xi and nu for now, to at least get a baseline time, which we can improve a bit...
     int xinu_U_stride = 1 * Ci * 32;  // assuming all 32 for now :-P
     int xinu_V_stride = 1 * tiles * tiles * Ci * 32;  // assuming 32 again
-    int ci_loops = (Ci + 31) >> 5;
+    // loop stupidly over ci loops too...
+    int Ci_blocks = (Ci + 31) >> 5;  // blocks of 32 for now, keep it simple
+    //int ci_loops = (Ci + 31) >> 5;
     // just going to loop stupidly over tiles for now.  will at least have some easy low-hanging fruit
     // when start optimizing...
     for(int th = 0; th < tiles; th++) {
@@ -395,48 +397,58 @@ void process_ci_block(
     for(int xi = 0; xi < 6; xi++) {
         for(int nu=0; nu < 6; nu++) {
             int b = xi * 6 + nu;
-            for(int ci_loop=0; ci_loop < ci_loops; ci_loop++) {
-                int ci = tid + (ci_loop << 5);
-                int ci32 = ci << 5;
-                if(ci < Ci) {
+            float sum_by_n[32];
+            for(int n = 0; n < 32; n++) {
+                sum_by_n[n] = 0.0f;
+            }
+            int co = tid;
+            for(int ci_block = 0; ci_block < Ci_blocks; ci_block++) {
+                // naive again for now...
+                int ci_block_start = ci_block << 5;
+                // int ci_block_end = ci_block_start + (1<<5);
+                int local_ci = tid;
+                int local_ci32 = local_ci << 5;
+                int global_ci = ci_block_start + tid;
+                int global_ci32 = global_ci << 5;
+                if(global_ci < Ci) {
                     for(int co = 0; co < 32; co++) {
                         // just copy directly, ignore latency hiding for now
-                        U_[ci32 + co] = U[b * xinu_U_stride + ci32 + co];
+                        U_[local_ci32 + co] = U[b * xinu_U_stride + global_ci32 + co];
                     }
                     for(int n = 0; n < 32; n++) {
                         // just copy directly, ignore latency hiding for now
-                        V_[ci32 + n] = V[tiles_offset + b * xinu_V_stride + ci32 + n];
+                        V_[local_ci32 + n] = V[tiles_offset + b * xinu_V_stride + global_ci32 + n];
                     }
+                    // no need to sync threads, since workgroup size == warpsize, ie 32 (TODO: AMD)
+                    
+                    // each thread handles ... hmmm...we'd better have 1024 threads (on NVIDIA), or 256 anyway (works also on AMD)
+                    // anyway, for now, each thread handles one value of co, all values of n block, and all values of ci
+                    // two loops
                 }
-                // no need to sync threads, since workgroup size == warpsize, ie 32 (TODO: AMD)
-                
-                // each thread handles ... hmmm...we'd better have 1024 threads (on NVIDIA), or 256 anyway (works also on AMD)
-                // anyway, for now, each thread handles one value of co, all values of n block, and all values of ci
-                // two loops
-                int co = tid;
                 for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
                    float sum = 0.0f;
                    #pragma unroll
-                   for(int ci = 0; ci < Ci; ci++) {
+                   for(int ci = 0; ci < 32; ci++) {
+                      int global_ci = ci_block_start + ci;  // this is so inefficient...
                       int ci32 = ci << 5;
-                      float value = U_[ci32 + co] * V_[ci32 + n];
+                      float value = global_ci < Ci ? U_[ci32 + co] * V_[ci32 + n] : 0.0f;
                       sum += value;
                    }
-                   //for(int ci32=0; ci32 < 32 * 32; ci32 += 32) {
-                   //   sum += U_[ci32 + co] * V_[ci32 + n];
-                   //}
-                   int offset = 0 +  // (n // 32)
-                                n * 1 * 32 * tiles * tiles * 6 * 6 + // (n % 32)
-                                0 + //  (co // 32)
-                                co * tiles * tiles * 6 * 6 + // (co % 32)
-                                th * tiles * 6 * 6 +   // th
-                                tw * 6 * 6 +   // tw
-                                0 +   // xi
-                                0 +   // nu
-                                b +   // xinu
-                                0;
-                   M[offset] = sum;
+                   sum_by_n[n] += sum;
                 }
+            }
+            for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
+               int offset = 0 +  // (n // 32)
+                            n * 1 * 32 * tiles * tiles * 6 * 6 + // (n % 32)
+                            0 + //  (co // 32)
+                            co * tiles * tiles * 6 * 6 + // (co % 32)
+                            th * tiles * 6 * 6 +   // th
+                            tw * 6 * 6 +   // tw
+                            0 +   // xi
+                            0 +   // nu
+                            b +   // xinu
+                            0;
+               M[offset] = sum_by_n[n];
             }
         }
     }

@@ -214,7 +214,7 @@ def calcM(N, Co, M_cl, U_shape, U_cl, V_shape, V_cl):
         M_cl, U_cl, V_cl,
         
         Ci, 1, tiles, GN,
-        cl.LocalMemory(Ci * 32 * 4), cl.LocalMemory(Ci * 32 * 4))
+        cl.LocalMemory(32 * 32 * 4), cl.LocalMemory(32 * 32 * 4))
     q.finish()
     timecheck('calced M_cl')
 
@@ -388,7 +388,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     
     print(M_from_cpu[0, 0, 0, 0])
     print(M_from_cl[0, 0, 0, 0])
-    assert np.allclose(M_from_cl, M_from_cpu, atol=1e-4)
+    assert np.allclose(M_from_cl, M_from_cpu, atol=1e-3)
     
     #np.transpose(V_from_cl, [2, 6, 4, 5, 3, 0, 1])
     #V_from_cl = V_from_cl.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
@@ -398,9 +398,15 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 def simple1():
     image_size = 16
     N = 4
-    Ci = 4
+    Ci = 256
     Co = 4
  
+    # {'padW': 1, 'kH': 3, 'iH': 56, 'iW': 56, 'padH': 1, 'kW': 3, 'Ci': 256, 'Co': 256, 'dW': 1, 'dH': 1}
+    #image_size = 56
+    #N = 64
+    #Ci = 256
+    #Co = 256
+
     start = time.time()
     for it in range(5):
         res = process(iH=image_size, iW=image_size, N=N, Ci=Ci,
