@@ -378,7 +378,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
         2,6,0,1,5,3,4).reshape(
         GN * 32, 6, 6, Ci, tiles, tiles)[:N]
     
-    assert np.allclose(V_from_cl_, V_from_cpu, atol=1e-4)
+    assert np.allclose(V_from_cl_, V_from_cpu, atol=1e-3)
 
     M_from_cpu = winograd_cpu.calcM(U=U_from_cl, V=V_from_cl, N=N, Co=Co)
     M_from_cl = np.copy(M)
@@ -396,16 +396,16 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     return {'W': W, 'O': O, 'I': I}
 
 def simple1():
-    image_size = 16
-    N = 4
-    Ci = 256
-    Co = 4
+    #image_size = 16
+    #N = 4
+    #Ci = 256
+    #Co = 4
  
     # {'padW': 1, 'kH': 3, 'iH': 56, 'iW': 56, 'padH': 1, 'kW': 3, 'Ci': 256, 'Co': 256, 'dW': 1, 'dH': 1}
-    #image_size = 56
-    #N = 64
-    #Ci = 256
-    #Co = 256
+    image_size = 56
+    N = 64
+    Ci = 32
+    Co = 32
 
     start = time.time()
     for it in range(5):
