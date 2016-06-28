@@ -234,10 +234,12 @@ kernel void calcV(
     // [xi, nu, N // 32, tH, tW, Ci, N % 32]
     // (note: since last dimension is 32, this is always going to be 128-byte aligned)
 
-    int out_offset = tid +            // N % 32
-                     (c << 5) +         // ci
-                     gx * (C << 5) +  // tw (?)
-                     gy * GX * (C << 5); // th (?)  (also, not sure if this should be GX or GY?
+    int out_offset = tid +                      // N % 32
+                     (c << 5) +                 // ci
+                     gx * (C << 5) +            // tw (?)
+                     gy * GX * (C << 5) +       // th (?)  (also, not sure if this should be GX or GY?
+                     blkN * GY_GX * (C << 5)  //   N // 32
+                     ;
     // int out_offset = blkN*GYS_GXS_C_1152 + gy*GXS_C_1152 + gx*C_1152 + c*1152 + tid;
 
     int nu_stride = GN * GY_GX * (C << 5);
