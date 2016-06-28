@@ -101,11 +101,6 @@ def calcU(q, W_shape, W_cl, U_cl):
     # layout
     # [xi, nu, Co // 32, Ci, Co % 32]
 
-    #U_from_cpu = winograd_cpu.calcU(W=W)
-    #U_from_cl_ = U_from_cl.transpose(0,1,2,4,3).reshape(6,6,GK * 32,Ci)[:,:,:Co,:]
-
-    #assert np.allclose(U_from_cl_, U_from_cpu, atol=1e-4)
-
     #return U_from_cl
     #return U_from_cpu
 
@@ -330,7 +325,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     U_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=U)
 
     #image_size = 1152*Ci*GXS*GYS*GN
-    V = np.zeros((GXS, GYS, Ci, 32, 6, 6), dtype=np.float32)
+    V = np.zeros((6, 6, GN,GXS, GYS, Ci, 32), dtype=np.float32)
     #I_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=I)
     V_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=V)
 
@@ -355,6 +350,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
         end = time.time()
         print('calcs done')
         print('time for all calcs:', end - start)
+        start = time.time()
 
     cl.enqueue_copy(q, O, O_cl)
 
@@ -363,13 +359,46 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     print('O.shape', O.shape)
     # O = O.reshape(GN * 32, GK * 32, til
 
+    W_from_cl = np.zeros((Ci, 3, 3, Co), dtype=np.float32)
+    cl.enqueue_copy(q, W_from_cl, W_cl)
+
+    U_from_cpu = winograd_cpu.calcU(W=W)
+    U_from_cl = np.zeros((6, 6, GK, Ci, 32), dtype=np.float32)
+    cl.enqueue_copy(q, U_from_cl, U_cl)
+    #cl.enqueue_copy(q, U_from_cl, U_cl)
+    U_from_cl_ = U_from_cl.transpose(
+        0, 1, 2, 4, 3).reshape(6, 6, GK * 32, Ci)[:, :, :Co]
+    assert np.allclose(U_from_cl_, U_from_cpu, atol=1e-4)
+
+    V_from_cpu = winograd_cpu.calcV(I=I)
+    V_from_cl = np.copy(V)
+    cl.enqueue_copy(q, V_from_cl, V_cl)
+    V_from_cl_ = V_from_cl.transpose(
+        2,6,0,1,5,3,4).reshape(
+        GN * 32, 6, 6, Ci, tiles, tiles)[:N]
+    
+    assert np.allclose(V_from_cl_, V_from_cpu, atol=1e-4)
+
+    M_from_cpu = winograd_cpu.calcM(U=U_from_cl, V=V_from_cl, N=N, Co=Co)
+    M_from_cl = np.copy(M)
+    cl.enqueue_copy(q, M_from_cl, M_cl)
+    q.finish()
+    M_from_cl = M_from_cl.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6)[:N, :Co]
+    
+    print(M_from_cpu[0, 0, 0, 0])
+    print(M_from_cl[0, 0, 0, 0])
+    assert np.allclose(M_from_cl, M_from_cpu, atol=1e-4)
+    
+    #np.transpose(V_from_cl, [2, 6, 4, 5, 3, 0, 1])
+    #V_from_cl = V_from_cl.reshape(GN * 32, 6, 6, Ci, tiles, tiles)[:N,:,:,:,:,:]
+    
     return {'W': W, 'O': O, 'I': I}
 
 def simple1():
     image_size = 4
-    N = 32
+    N = 4
     Ci = 32
-    Co = 32
+    Co = 4
  
     start = time.time()
     for it in range(5):
