@@ -385,8 +385,8 @@ void process_ci_block(
     int ci = tid;
     int ci32 = ci << 5;
     // stupidly loop over xi and nu for now, to at least get a baseline time, which we can improve a bit...
-    int xinu_U_stride = 1 * 32 * 32;  // assuming all 32 for now :-P
-    int xinu_V_stride = 1 * 1 * 1 * 32 * 32;  // assuming 32 again
+    int xinu_U_stride = 1 * Ci * 32;  // assuming all 32 for now :-P
+    int xinu_V_stride = 1 * 1 * 1 * Ci * 32;  // assuming 32 again
     for(int xi = 0; xi < 6; xi++) {
         for(int nu=0; nu < 6; nu++) {
             int b = xi * 6 + nu;
@@ -407,9 +407,14 @@ void process_ci_block(
             for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
                float sum = 0.0f;
                #pragma unroll
-               for(int ci32=0; ci32 < 32 * 32; ci32 += 32) {
-                  sum += U_[ci32 + co] * V_[ci32 + n];
+               for(int ci = 0; ci < Ci; ci++) {
+                  int ci32 = ci << 5;
+                  float value = U_[ci32 + co] * V_[ci32 + n];
+                  sum += value;
                }
+               //for(int ci32=0; ci32 < 32 * 32; ci32 += 32) {
+               //   sum += U_[ci32 + co] * V_[ci32 + n];
+               //}
                int offset = 0 +  // (n // 32)
                             n * 1 * 32 * 1 * 1 * 6 * 6 + // (n % 32)
                             0 + //  (co // 32)

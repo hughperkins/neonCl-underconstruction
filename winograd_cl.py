@@ -194,7 +194,7 @@ def calcM(N, Co, M_cl, U_shape, U_cl, V_shape, V_cl):
     GK   = ceil_div(Co, 32)
     tiles = V_shape[4]
     GN = V_shape[2]
-    #print('GK', GK, 'GN', GN, 'tiles', tiles, 'Co', Co, 'Ci', Ci)
+    print('GK', GK, 'GN', GN, 'tiles', tiles, 'Co', Co, 'Ci', Ci)
 
     # M_from_cl = np.zeros((GK * 32 * GN * 32 * tiles * tiles * 6 * 6,), dtype=np.float32)
     #M_from_cl = np.zeros((GN, 32, GK, 32, tiles, tiles, 6, 6,), dtype=np.float32)
@@ -397,7 +397,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
 def simple1():
     image_size = 4
     N = 4
-    Ci = 32
+    Ci = 4
     Co = 4
  
     start = time.time()
