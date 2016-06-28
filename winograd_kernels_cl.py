@@ -149,7 +149,7 @@ static inline int div64(int value, int div_mul, int div_shift)
 kernel void calcV(
     global float* Out, global const float* In,
     int Y, int X, int N, int pad_y, int pad_x,
-    int GXS, int GYS2, int GXS2, int magic_GXS2, int shift_GXS2,
+    int GXS, int GYS2, int GXS2, int magic_GXS2, int shift_GXS2, int magic_GXS, int shift_GXS,
     int shlY, int shlX, int maskY, int shrY, int maskX, int shrX, int shlN, int maskN,
     int YXN, int XN, int GYS_GXS_C_1152, int GXS_C_1152, int C_1152,
     int GX, int GY_GX, int GN, int C)
@@ -160,21 +160,26 @@ kernel void calcV(
     int c     = get_num_groups(2) - get_group_id(2) - 1;
 
     // unpack y,x from get_group_id(0)
-    int gy2 = div64(blkYX, magic_GXS2, shift_GXS2);
-    int gx2 = blkYX - gy2*GXS2;
-
+    int gy2 = (blkYX * magic_GXS) >> shift_GXS;
+    int gx2 = blkYX - gy2*GXS;
+    
     // Implement a square wave block id remapping
     // (for all but last row (if odd number of rows))
-    int gy = gy2 << 1;
-    int gx = gx2;
-    if (gy2 != GYS2)
-    {
-        gy += (gx2 & 1) ^ ((gx2 & 2) >> 1);
-        gx  = gx2 >> 1;
-    }
+    //int gy = gy2 << 1;
+    //int gx = gx2;
+    //if (gy2 != GYS2)
+    //{
+    //    gy += (gx2 & 1) ^ ((gx2 & 2) >> 1);
+     //   gx  = gx2 >> 1;
+    //}
     // Scan backwards on odd rows
-    if (gy2 & 1)
-        gx = GXS - gx - 1;
+    //if (gy2 & 1)
+    //    gx = GXS - gx - 1;
+        
+    int gx = gx2;
+    int gy = gy2;
+
+    //int gygx = gy * tiles + gx;
 
     // Super block YXN coordinates
     int y0 = (gy << shlY) + (((tid & maskY) >> shrY) << 2) - pad_y;
@@ -236,8 +241,8 @@ kernel void calcV(
 
     int out_offset = tid +                      // N % 32
                      (c << 5) +                 // ci
-                     gx * (C << 5) +            // tw (?)
-                     gy * GX * (C << 5) +       // th (?)  (also, not sure if this should be GX or GY?
+                     blkYX * (C << 5) +            // th* tiles + tw (?)
+                     0 *((2 - gy) * 3 + (2 - gx)) * (C << 5) +            // th* tiles + tw (?)
                      blkN * GY_GX * (C << 5)  //   N // 32
                      ;
     // int out_offset = blkN*GYS_GXS_C_1152 + gy*GXS_C_1152 + gx*C_1152 + c*1152 + tid;
@@ -261,7 +266,12 @@ kernel void calcV(
         Out[out_offset + i * xi_stride + 3 * nu_stride] = (fma(t3,  2.0f, t2));
         Out[out_offset + i * xi_stride + 4 * nu_stride] = (fma(t3, -2.0f, t2));
         Out[out_offset + i * xi_stride + 5 * nu_stride] = (fma(T[i][1], 4.0f, t5));
+
+        //Out[out_offset + i * xi_stride + 0 * nu_stride] = 123.45f;
     }
+    //Out[0] = get_num_groups(1);
+    //Out[get_group_id(1) + 1] = (float)gy;
+    //Out[get_group_id(1) + 10] = (float)gx;
 }
 """
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros

@@ -141,7 +141,8 @@ def calcV(I_shape, I_cl, V_cl):
     GYS2 = GYS // 2
     GXS2 = GXS  * 2
 
-    div_GXS2 = get_div_mul_shift_64(GXS2)
+    div_GXS2 = get_div_mul_shift_32(GXS * GYS, GXS2)
+    div_GXS = get_div_mul_shift_32(GXS * GYS, GXS)
 
     image_size = 1152*Ci*GXS*GYS*GN
     #V_from_cl = np.zeros((image_size,), dtype=np.float32)
@@ -149,7 +150,10 @@ def calcV(I_shape, I_cl, V_cl):
     #V_cl = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=V_from_cl)
     #q.finish()
     #timecheck('allocated V_cl buffers')
+    
+    print('div_GXS', div_GXS)
 
+    print('GYS', GYS, 'GXS', GXS, 'GN', GN, 'Ci', Ci, 'GY_GX', GXS * GYS)
     grid = (GN, GYS*GXS, Ci)
     block = (32, 1, 1)
 
@@ -159,7 +163,7 @@ def calcV(I_shape, I_cl, V_cl):
         V_cl, I_cl,
         
         iH, iW, N, padH, padW,
-        GXS, GYS2, GXS2, div_GXS2[0], div_GXS2[1],
+        GXS, GYS2, GXS2, div_GXS2[0], div_GXS2[1], div_GXS[0], div_GXS[1],
         shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
         iH * iW * N, iW * N, GYS*GXS*Ci*1152, GXS * Ci * 1152, Ci * 1152,
         GXS, GXS * GYS, GN, Ci)
@@ -374,9 +378,47 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     V_from_cpu = winograd_cpu.calcV(I=I)
     V_from_cl = np.copy(V)
     cl.enqueue_copy(q, V_from_cl, V_cl)
+    
+    print(V_from_cl.reshape(V_from_cl.size)[:20])
+    
+    print('tiles', tiles)
+    # 0  1   2   3    4   5   6
+    # 6, 6, GN,GXS, GYS, Ci, 32
     V_from_cl_ = V_from_cl.transpose(
         2,6,0,1,5,3,4).reshape(
         GN * 32, 6, 6, Ci, tiles, tiles)[:N]
+    #print('V_from_cpu.shape', V_from_cpu.shape)
+    #print('V_from_cl_.shape', V_from_cl_.shape)
+    
+    #print(V_from_cpu[0,0,0,0,:,:])
+    #print(V_from_cl_[0,0,0,0,:,:])
+
+    #print('')
+    #print(V_from_cpu[0,0,0,1,:,:])
+    #print(V_from_cl_[0,0,0,1,:,:])
+
+    #print('')
+    #print(V_from_cpu[1,:2,:2,0,:,:])
+    #print(V_from_cl_[1,:2,:2,0,:,:])
+    
+    #print('')
+    #print(V_from_cpu[0,:,:,0,0,0])
+    #print(V_from_cl_[0,:,:,0,0,0])
+    #print('')
+    #print(V_from_cpu[0,:,:,1,0,0])  # ci
+    #print(V_from_cl_[0,:,:,1,0,0])
+    #print('')
+    #print(V_from_cpu[1,:,:,0,0,0])  # n
+    #print(V_from_cl_[1,:,:,0,0,0])
+    #print('')
+    #print(V_from_cpu[1,:,:,0,0,1])  # tw
+    #print(V_from_cl_[1,:,:,0,0,1])
+    #print('')
+    #print(V_from_cpu[1,:,:,0,1,0])  # th
+    #print(V_from_cl_[1,:,:,0,1,0])
+    #print('')
+    #print(V_from_cpu[32,:,:,0,0,0])  # n
+    #print(V_from_cl_[32,:,:,0,0,0])
     
     assert np.allclose(V_from_cl_, V_from_cpu, atol=1e-1)
 
@@ -386,8 +428,8 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     q.finish()
     M_from_cl = M_from_cl.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6)[:N, :Co]
     
-    print(M_from_cpu[0, 0, 0, 0])
-    print(M_from_cl[0, 0, 0, 0])
+    #print(M_from_cpu[0, 0, 0, 0])
+    #print(M_from_cl[0, 0, 0, 0])
     assert np.allclose(M_from_cl, M_from_cpu, atol=1e-3)
     
     #np.transpose(V_from_cl, [2, 6, 4, 5, 3, 0, 1])
@@ -403,9 +445,9 @@ def simple1():
  
     # {'padW': 1, 'kH': 3, 'iH': 56, 'iW': 56, 'padH': 1, 'kW': 3, 'Ci': 256, 'Co': 256, 'dW': 1, 'dH': 1}
     image_size = 56
-    N = 64
-    Ci = 32
-    Co = 32
+    N = 4
+    Ci = 4
+    Co = 4
 
     start = time.time()
     for it in range(5):
