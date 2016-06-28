@@ -205,7 +205,7 @@ def calcM(N, Co, M_cl, U_shape, U_cl, V_shape, V_cl):
     #timecheck('allocated M_cl buffers')
 
     # grid = (GN, GYS*GXS, Ci)
-    grid = (1,1,1) # for now...
+    grid = (tiles * tiles,1,1) # b
     block = (32, 1, 1)
 
     call_cl_kernel(
@@ -378,7 +378,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
         2,6,0,1,5,3,4).reshape(
         GN * 32, 6, 6, Ci, tiles, tiles)[:N]
     
-    assert np.allclose(V_from_cl_, V_from_cpu, atol=1e-3)
+    assert np.allclose(V_from_cl_, V_from_cpu, atol=1e-1)
 
     M_from_cpu = winograd_cpu.calcM(U=U_from_cl, V=V_from_cl, N=N, Co=Co)
     M_from_cl = np.copy(M)
