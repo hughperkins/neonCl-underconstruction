@@ -14,6 +14,7 @@
 
 from __future__ import print_function, division
 import time
+import random
 import numpy as np
 import pyopencl as cl
 from neoncl import api
@@ -162,7 +163,7 @@ def calcM(N, Co, M_cl, U_shape, U_cl, V_shape, V_cl):
         q, grid, block,
         M_cl, U_cl, V_cl,
         
-        Ci, 1, tiles, GN,
+        Ci, 1, tiles, GN, GK,
         cl.LocalMemory(32 * 32 * 4), cl.LocalMemory(32 * 32 * 4))
     q.finish()
     timecheck('calced M_cl')
@@ -299,6 +300,22 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     
     print(M_from_cl.reshape(M_from_cl.size)[:20])
     
+    print(M_from_cpu[0,0,0,0])
+    print(M_from_cl[0,0,0,0])
+    print('')
+
+    print(M_from_cpu[0,1,0,0])
+    print(M_from_cl[0,1,0,0])
+    print('')
+    
+    print(M_from_cpu[0,63,0,0])
+    print(M_from_cl[0,63,0,0])
+    print('')
+    
+    print(M_from_cpu[1,0,0,0])
+    print(M_from_cl[1,0,0,0])
+    print('')
+    
     assert np.allclose(M_from_cl, M_from_cpu, atol=1e-2)
     
     #np.transpose(V_from_cl, [2, 6, 4, 5, 3, 0, 1])
@@ -313,10 +330,10 @@ def simple1():
     #Co = 4
  
     # {'padW': 1, 'kH': 3, 'iH': 56, 'iW': 56, 'padH': 1, 'kW': 3, 'Ci': 256, 'Co': 256, 'dW': 1, 'dH': 1}
-    image_size = 4
-    N = 4
-    Ci = 4
-    Co = 4
+    image_size = 12
+    N = 64
+    Ci = 64
+    Co = 64
 
     start = time.time()
     for it in range(5):
@@ -329,27 +346,38 @@ def simple1():
     W = res['W']
     # print('wino O[0,:,:,0]')
 
-    cpuO = np.zeros((Co, image_size, image_size, N), dtype=np.float32)
-    for n in range(N):
-        for co in range(Co):
-            for h in range(image_size):
-                for w in range(image_size):
-                    cpuvalue = cpu_check.checkO(W=W, I=I, O=O, c=co, h=h, w=w, n=n)
-                    cpuO[co, h, w, n] = cpuvalue
+    #cpuO = np.zeros((Co, image_size, image_size, N), dtype=np.float32)
+    #for n in range(N):
+    #    for co in range(Co):
+    #        for h in range(image_size):
+    #            for w in range(image_size):
+    random.seed(123)
+    for it in range(400):
+        n = random.randint(0,N - 1)
+        co = random.randint(0, Co - 1)
+        h = random.randint(0, image_size - 1)
+        w = random.randint(0, image_size - 1)
+        cpuvalue = cpu_check.checkO(W=W, I=I, O=O, c=co, h=h, w=w, n=n)
+        # cpuO[co, h, w, n] = cpuvalue
+        diff = abs(O[co, h, w, n] - cpuvalue)
+        #if diff >= 1e-3:
+        #    print('co', co, 'h', h, 'w', w, 'n', n, 'diff', diff)
+        print('co', co, 'h', h, 'w', w, 'n', n, O[co, h, w, n], cpuvalue, 'diff', diff)
+        assert diff < 1e-3
     #print('cpuO[0]', cpuO[0])
-    n_values = np.random.choice(N, (min(N, 3),), False)
-    co_values = np.random.choice(Co, (min(Co, 3),), False)
-    for n in n_values:
-      for co in co_values:
+    #n_values = np.random.choice(N, (min(N, 3),), False)
+    #co_values = np.random.choice(Co, (min(Co, 3),), False)
+    #for n in n_values:
+    #  for co in co_values:
         #print('co', co, 'n', n)
         #print('winograd')
         #print(O[co,:,:,n].reshape(image_size, image_size))
         #print('cpu')
         #print(cpuO[co,:,:,n].reshape(image_size,image_size))
-        assert np.allclose(O[co,:,:,n], cpuO[co,:,:,n], atol=1e-3)
+    #    assert np.allclose(O[co,:,:,n], cpuO[co,:,:,n], atol=1e-3)
     #printTensor(cpuO[0])
 
-    print('diff', end - start)
+    #print('diff', end - start)
 
    # checkO(W=W, I=I, O=O, c=0, h=0, w=0, n=0)
    # checkO(W=W, I=I, O=O, c=0, h=0, w=0, n=1)
