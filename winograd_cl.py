@@ -344,13 +344,7 @@ def simple1():
     O = res['O']
     I = res['I']
     W = res['W']
-    # print('wino O[0,:,:,0]')
 
-    #cpuO = np.zeros((Co, image_size, image_size, N), dtype=np.float32)
-    #for n in range(N):
-    #    for co in range(Co):
-    #        for h in range(image_size):
-    #            for w in range(image_size):
     random.seed(123)
     for it in range(400):
         n = random.randint(0,N - 1)
@@ -358,33 +352,9 @@ def simple1():
         h = random.randint(0, image_size - 1)
         w = random.randint(0, image_size - 1)
         cpuvalue = cpu_check.checkO(W=W, I=I, O=O, c=co, h=h, w=w, n=n)
-        # cpuO[co, h, w, n] = cpuvalue
         diff = abs(O[co, h, w, n] - cpuvalue)
-        #if diff >= 1e-3:
-        #    print('co', co, 'h', h, 'w', w, 'n', n, 'diff', diff)
         print('co', co, 'h', h, 'w', w, 'n', n, O[co, h, w, n], cpuvalue, 'diff', diff)
         assert diff < 1e-3
-    #print('cpuO[0]', cpuO[0])
-    #n_values = np.random.choice(N, (min(N, 3),), False)
-    #co_values = np.random.choice(Co, (min(Co, 3),), False)
-    #for n in n_values:
-    #  for co in co_values:
-        #print('co', co, 'n', n)
-        #print('winograd')
-        #print(O[co,:,:,n].reshape(image_size, image_size))
-        #print('cpu')
-        #print(cpuO[co,:,:,n].reshape(image_size,image_size))
-    #    assert np.allclose(O[co,:,:,n], cpuO[co,:,:,n], atol=1e-3)
-    #printTensor(cpuO[0])
-
-    #print('diff', end - start)
-
-   # checkO(W=W, I=I, O=O, c=0, h=0, w=0, n=0)
-   # checkO(W=W, I=I, O=O, c=0, h=0, w=0, n=1)
-   # checkO(W=W, I=I, O=O, c=0, h=1, w=0, n=0)
-   # checkO(W=W, I=I, O=O, c=0, h=0, w=1, n=0)
-   # checkO(W=W, I=I, O=O, c=1, h=0, w=0, n=0)
-#    checkO(W=W, I=I, O=O, c=3, h=2, w=1, n=27)
 
 np.set_printoptions(precision=2, suppress=True)
 simple1()
