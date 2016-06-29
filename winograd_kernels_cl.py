@@ -408,7 +408,10 @@ void process_ci_block(
                         int local_ci32 = local_ci << 5;
                         int global_ci = ci_block_start + tid;
                         int global_ci32 = global_ci << 5;
+                        if(false) {
                         barrier(CLK_LOCAL_MEM_FENCE);
+                        }
+                        if(false) {
                         if(global_ci < Ci) {
                             {
                                 int local_co = tid1;
@@ -419,16 +422,27 @@ void process_ci_block(
                                 V_[local_ci32 + n] = V[xinu * xinu_V_stride + gn * tiles * tiles * Ci * 32 + tiles_offset + global_ci32 + n];
                             }
                         }
+                        }
+                        if(false) {
                         barrier(CLK_LOCAL_MEM_FENCE);
+                        }
                         int local_co = tid;
                         {
-                          int n = tid1;
-                           #pragma unroll
-                           for(int ci = 0; ci < 32; ci++) {
+                         //  float Upriv[32];
+                           //float Vpriv[32];
+                           int n = tid1;
+                           for(int ci = 0; ci < 32; ci+=4) {
                               int global_ci = ci_block_start + ci;
                               int ci32 = ci << 5;
-                              float value = global_ci < Ci ? U_[ci32 + local_co] * V_[ci32 + n] : 0.0f;
-                              sum += value;
+                              float v0 = global_ci + 0 < Ci ? U_[ci32 + 0 + local_co] * V_[ci32 + 0 + n] : 0.0f;
+                              float v1 = global_ci + 1 < Ci ? U_[ci32 + 32 + local_co] * V_[ci32 + 32 + n] : 0.0f;
+                              float v2 = global_ci + 2 < Ci ? U_[ci32 + 64 + local_co] * V_[ci32 + 64 + n] : 0.0f;
+                              float v3 = global_ci + 3 < Ci ? U_[ci32 + 94 + local_co] * V_[ci32 + 96 + n] : 0.0f;
+
+                              v0 += v2;
+                              v1 += v3;
+                              v0 += v1;
+                              sum += v0;
                            }
                         }
                     }

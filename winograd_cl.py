@@ -158,6 +158,9 @@ def calcM(N, Co, M_cl, U_shape, U_cl, V_shape, V_cl):
     grid = (tiles * tiles,1,1) # b
     block = (32, 32, 1)
 
+    q.finish()
+    timecheck('started M_cl')
+
     call_cl_kernel(
         k_calcM,
         q, grid, block,
