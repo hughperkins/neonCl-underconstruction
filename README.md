@@ -1,4 +1,4 @@
-# WinogradCl
+# NeonCl
 
 A port of nervana neon to OpenCL:
 - Kepler direct convolution kernels: done :-)
