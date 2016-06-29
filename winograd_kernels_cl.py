@@ -448,11 +448,10 @@ void process_ci_block(
                     for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
                        // [n//32][n % 32][co // 32][co % 32][th][tw][xi][nu]
                        int offset = (gn32 + n) * GK * 32 * tiles * tiles * 6 * 6 + // (n // 32) * 32 + (n % 32)
-                                    // 0 + //  (co // 32)
                                     (gk32 + local_co) * tiles * tiles * 6 * 6 + // (co % 32)
                                     b * 6 * 6 +   // b
-                                    xinu +   // xinu
-                                    0.0f;
+                                    xinu   // xinu
+                                    ;
                        M[offset] = sum_by_n[n];
                     }
                 }
