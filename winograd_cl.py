@@ -315,7 +315,7 @@ def simple1():
  
     # {'padW': 1, 'kH': 3, 'iH': 56, 'iW': 56, 'padH': 1, 'kW': 3, 'Ci': 256, 'Co': 256, 'dW': 1, 'dH': 1}
     image_size = 56
-    N = 64
+    N = 32
     Ci = 32
     Co = 32
 
