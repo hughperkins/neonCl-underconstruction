@@ -390,6 +390,7 @@ void process_ci_block(
     // for now, let's do simple and stupid, no float4s or anything, just get something working :-P
     // also, dont worry about register spills, occupancy etc ...
 
+    int tid1 = get_local_id(1);
     int tid = get_local_id(0);
     // stupidly loop over xi and nu for now, to at least get a baseline time, which we can improve a bit...
     int xinu_U_stride = GK * Ci * 32;  // assuming all 32 for now :-P
@@ -403,10 +404,10 @@ void process_ci_block(
             for(int xi = 0; xi < 6; xi++) {
                 for(int nu=0; nu < 6; nu++) {
                     int xinu = xi * 6 + nu;
-                    float sum_by_n[32];
-                    for(int n = 0; n < 32; n++) {
-                        sum_by_n[n] = 0.0f;
-                    }
+                    float sum = 0.0f;
+                    //for(int n = 0; n < 32; n++) {
+                    //    sum_by_n[n] = 0.0f;
+                    //}
                     // int global_co = gk32 + tid;
                     for(int ci_block = 0; ci_block < Ci_blocks; ci_block++) {
                         // naive again for now...
@@ -415,12 +416,17 @@ void process_ci_block(
                         int local_ci32 = local_ci << 5;
                         int global_ci = ci_block_start + tid;
                         int global_ci32 = global_ci << 5;
+                        barrier(CLK_LOCAL_MEM_FENCE);
                         if(global_ci < Ci) {
-                            for(int local_co = 0; local_co < 32; local_co++) {
+                            {
+                               int local_co = tid1;
+                            //for(int local_co = 0; local_co < 32; local_co++) {
                                 // just copy directly, ignore latency hiding for now
                                 U_[local_ci32 + local_co] = U[xinu * xinu_U_stride + gk * Ci * 32 + global_ci32 + local_co];
                             }
-                            for(int n = 0; n < 32; n++) {
+                            {
+                              int n = tid1;
+                            //for(int n = 0; n < 32; n++) {
                                 // just copy directly, ignore latency hiding for now
                                 V_[local_ci32 + n] = V[xinu * xinu_V_stride + gn * tiles * tiles * Ci * 32 + tiles_offset + global_ci32 + n];
                             }
@@ -430,9 +436,12 @@ void process_ci_block(
                             // anyway, for now, each thread handles one value of co, all values of n block, and all values of ci
                             // two loops
                         }
+                        barrier(CLK_LOCAL_MEM_FENCE);
                         int local_co = tid;
-                        for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
-                           float sum = 0.0f;
+                        {
+                          int n = tid1;
+                        //for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
+                          // float sum = 0.0f;
                            //int global_n = gn32 + n;
                            #pragma unroll
                            for(int ci = 0; ci < 32; ci++) {
@@ -441,18 +450,20 @@ void process_ci_block(
                               float value = global_ci < Ci ? U_[ci32 + local_co] * V_[ci32 + n] : 0.0f;
                               sum += value;
                            }
-                           sum_by_n[n] += sum;
+                          // sum_by_n[n] += sum;
                         }
                     }
                     int local_co = tid;
-                    for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
+                    {
+                      int n = tid1;
+                    //for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
                        // [n//32][n % 32][co // 32][co % 32][th][tw][xi][nu]
                        int offset = (gn32 + n) * GK * 32 * tiles * tiles * 6 * 6 + // (n // 32) * 32 + (n % 32)
                                     (gk32 + local_co) * tiles * tiles * 6 * 6 + // (co % 32)
                                     b * 6 * 6 +   // b
                                     xinu   // xinu
                                     ;
-                       M[offset] = sum_by_n[n];
+                       M[offset] = sum;
                     }
                 }
             }
@@ -467,8 +478,11 @@ kernel void calcM(global float *restrict M, const global float *restrict U, cons
     ) {
 
     int b = get_group_id(0);
+    int tid1 = get_local_id(1);
 
-    process_ci_block(M, U, V, Ci, tiles, GN, GK, b, U_, V_);
+   // if(tid1 == 0) {  // experiment to see if this affects the time
+        process_ci_block(M, U, V, Ci, tiles, GN, GK, b, U_, V_);
+    //}
 }
     """
     module = cl.Program(ctx, code).build(options='')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
