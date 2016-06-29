@@ -390,11 +390,11 @@ void process_ci_block(
 
     int tid1 = get_local_id(1);
     int tid = get_local_id(0);
-    int xinu_U_stride = GK * Ci * 32;  // assuming all 32 for now :-P
-    int xinu_V_stride = GN * tiles * tiles * Ci * 32;  // assuming 32 again
-    int Ci_blocks = (Ci + 31) >> 5;  // blocks of 32 for now, keep it simple
+    int xinu_U_stride = GK * Ci * 32;
+    int xinu_V_stride = GN * tiles * tiles * Ci * 32;
+    int Ci_blocks = (Ci + 31) >> 5;
     int tiles_offset = b * Ci * 32;
-    for(int gn = 0; gn < GN; gn++) { // loop stpuidly for now...
+    for(int gn = 0; gn < GN; gn++) {
         int gn32 = gn << 5;
         for(int gk = 0; gk < GK; gk++) {
             int gk32 = gk << 5;
@@ -403,7 +403,6 @@ void process_ci_block(
                     int xinu = xi * 6 + nu;
                     float sum = 0.0f;
                     for(int ci_block = 0; ci_block < Ci_blocks; ci_block++) {
-                        // naive again for now...
                         int ci_block_start = ci_block << 5;
                         int local_ci = tid;
                         int local_ci32 = local_ci << 5;
@@ -412,11 +411,11 @@ void process_ci_block(
                         barrier(CLK_LOCAL_MEM_FENCE);
                         if(global_ci < Ci) {
                             {
-                               int local_co = tid1;
+                                int local_co = tid1;
                                 U_[local_ci32 + local_co] = U[xinu * xinu_U_stride + gk * Ci * 32 + global_ci32 + local_co];
                             }
                             {
-                              int n = tid1;
+                                int n = tid1;
                                 V_[local_ci32 + n] = V[xinu * xinu_V_stride + gn * tiles * tiles * Ci * 32 + tiles_offset + global_ci32 + n];
                             }
                         }
@@ -435,7 +434,7 @@ void process_ci_block(
                     }
                     int local_co = tid;
                     {
-                      int n = tid1;
+                       int n = tid1;
                        int offset = (gn32 + n) * GK * 32 * tiles * tiles * 6 * 6 + // (n // 32) * 32 + (n % 32)
                                     (gk32 + local_co) * tiles * tiles * 6 * 6 + // (co % 32)
                                     b * 6 * 6 +   // b
