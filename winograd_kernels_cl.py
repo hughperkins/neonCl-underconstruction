@@ -387,12 +387,9 @@ void process_ci_block(
     global float *restrict M, global float *restrict U, global float *restrict V,
         int Ci, int tiles, int GN, int GK, int b,
         local float *U_, local float *V_) {
-    // for now, let's do simple and stupid, no float4s or anything, just get something working :-P
-    // also, dont worry about register spills, occupancy etc ...
 
     int tid1 = get_local_id(1);
     int tid = get_local_id(0);
-    // stupidly loop over xi and nu for now, to at least get a baseline time, which we can improve a bit...
     int xinu_U_stride = GK * Ci * 32;  // assuming all 32 for now :-P
     int xinu_V_stride = GN * tiles * tiles * Ci * 32;  // assuming 32 again
     int Ci_blocks = (Ci + 31) >> 5;  // blocks of 32 for now, keep it simple
@@ -405,10 +402,6 @@ void process_ci_block(
                 for(int nu=0; nu < 6; nu++) {
                     int xinu = xi * 6 + nu;
                     float sum = 0.0f;
-                    //for(int n = 0; n < 32; n++) {
-                    //    sum_by_n[n] = 0.0f;
-                    //}
-                    // int global_co = gk32 + tid;
                     for(int ci_block = 0; ci_block < Ci_blocks; ci_block++) {
                         // naive again for now...
                         int ci_block_start = ci_block << 5;
@@ -420,44 +413,29 @@ void process_ci_block(
                         if(global_ci < Ci) {
                             {
                                int local_co = tid1;
-                            //for(int local_co = 0; local_co < 32; local_co++) {
-                                // just copy directly, ignore latency hiding for now
                                 U_[local_ci32 + local_co] = U[xinu * xinu_U_stride + gk * Ci * 32 + global_ci32 + local_co];
                             }
                             {
                               int n = tid1;
-                            //for(int n = 0; n < 32; n++) {
-                                // just copy directly, ignore latency hiding for now
                                 V_[local_ci32 + n] = V[xinu * xinu_V_stride + gn * tiles * tiles * Ci * 32 + tiles_offset + global_ci32 + n];
                             }
-                            // no need to sync threads, since workgroup size == warpsize, ie 32 (TODO: AMD)
-                            
-                            // each thread handles ... hmmm...we'd better have 1024 threads (on NVIDIA), or 256 anyway (works also on AMD)
-                            // anyway, for now, each thread handles one value of co, all values of n block, and all values of ci
-                            // two loops
                         }
                         barrier(CLK_LOCAL_MEM_FENCE);
                         int local_co = tid;
                         {
                           int n = tid1;
-                        //for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
-                          // float sum = 0.0f;
-                           //int global_n = gn32 + n;
                            #pragma unroll
                            for(int ci = 0; ci < 32; ci++) {
-                              int global_ci = ci_block_start + ci;  // this is so inefficient...
+                              int global_ci = ci_block_start + ci;
                               int ci32 = ci << 5;
                               float value = global_ci < Ci ? U_[ci32 + local_co] * V_[ci32 + n] : 0.0f;
                               sum += value;
                            }
-                          // sum_by_n[n] += sum;
                         }
                     }
                     int local_co = tid;
                     {
                       int n = tid1;
-                    //for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
-                       // [n//32][n % 32][co // 32][co % 32][th][tw][xi][nu]
                        int offset = (gn32 + n) * GK * 32 * tiles * tiles * 6 * 6 + // (n // 32) * 32 + (n % 32)
                                     (gk32 + local_co) * tiles * tiles * 6 * 6 + // (co % 32)
                                     b * 6 * 6 +   // b
