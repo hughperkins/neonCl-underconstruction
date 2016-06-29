@@ -152,7 +152,7 @@ def calcM(N, Co, M_cl, U_shape, U_cl, V_shape, V_cl):
     GK   = ceil_div(Co, 32)
     tiles = V_shape[4]
     GN = V_shape[2]
-    print('GK', GK, 'GN', GN, 'tiles', tiles, 'Co', Co, 'Ci', Ci)
+    print('GK', GK, 'GN', GN, 'tiles', tiles, 'Co', Co, 'Ci', Ci, 'N', N)
 
     grid = (tiles * tiles,1,1) # b
     block = (32, 1, 1)
@@ -172,6 +172,8 @@ def calcM(N, Co, M_cl, U_shape, U_cl, V_shape, V_cl):
     # [xi, nu, co // 32,         ci, co % 32]
     # V
     # [xi, nu,  n // 32, th, tw, ci,  n % 32]
+
+    # [n//32][n % 32][co // 32][co % 32][th][tw][xi][nu] 
 
 def calcO(O_cl, M_shape, M_cl):
     GK = M_shape[2]
@@ -278,8 +280,6 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     V_from_cl = np.copy(V)
     cl.enqueue_copy(q, V_from_cl, V_cl)
     
-    print(V_from_cl.reshape(V_from_cl.size)[:20])
-    
     print('tiles', tiles)
     # 0  1   2   3    4   5   6
     # 6, 6, GN,GXS, GYS, Ci, 32
@@ -287,16 +287,18 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
         2,6,0,1,5,3,4).reshape(
         GN * 32, 6, 6, Ci, tiles, tiles)[:N]
     
-    assert np.allclose(V_from_cl_, V_from_cpu, atol=1e-1)
+    assert np.allclose(V_from_cl_, V_from_cpu, atol=1e-3)
 
+    #      0       1         2        3   4   5   6   7
+    # [n//32][n % 32][co // 32][co % 32][th][tw][xi][nu]
     M_from_cpu = winograd_cpu.calcM(U=U_from_cl, V=V_from_cl, N=N, Co=Co)
     M_from_cl = np.copy(M)
     cl.enqueue_copy(q, M_from_cl, M_cl)
     q.finish()
     M_from_cl = M_from_cl.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6)[:N, :Co]
     
-    print(M_from_cpu[0, 0, 0, 0])
-    print(M_from_cl[0, 0, 0, 0])
+    print(M_from_cl.reshape(M_from_cl.size)[:20])
+    
     assert np.allclose(M_from_cl, M_from_cpu, atol=1e-2)
     
     #np.transpose(V_from_cl, [2, 6, 4, 5, 3, 0, 1])
@@ -312,7 +314,7 @@ def simple1():
  
     # {'padW': 1, 'kH': 3, 'iH': 56, 'iW': 56, 'padH': 1, 'kW': 3, 'Ci': 256, 'Co': 256, 'dW': 1, 'dH': 1}
     image_size = 4
-    N = 64
+    N = 4
     Ci = 4
     Co = 4
 

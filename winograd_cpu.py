@@ -124,6 +124,7 @@ def calcM(N, Co, U, V):
     tiles = V.shape[3]
     GN = V.shape[2]
 
+    print('calcM cpu GN', GN, 'N', N)
     U = U.transpose(0,1,2,4,3).reshape(6,6,GK * 32,Ci)[:,:,:Co,:]
 
     V = V.transpose(

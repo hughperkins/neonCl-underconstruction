@@ -393,61 +393,64 @@ void process_ci_block(
     int tid = get_local_id(0);
     // stupidly loop over xi and nu for now, to at least get a baseline time, which we can improve a bit...
     int xinu_U_stride = 1 * Ci * 32;  // assuming all 32 for now :-P
-    int xinu_V_stride = 1 * tiles * tiles * Ci * 32;  // assuming 32 again
+    int xinu_V_stride = GN * tiles * tiles * Ci * 32;  // assuming 32 again
     int Ci_blocks = (Ci + 31) >> 5;  // blocks of 32 for now, keep it simple
     int tiles_offset = b * Ci * 32;
-    for(int xi = 0; xi < 6; xi++) {
-        for(int nu=0; nu < 6; nu++) {
-            int xinu = xi * 6 + nu;
-            float sum_by_n[32];
-            for(int n = 0; n < 32; n++) {
-                sum_by_n[n] = 0.0f;
-            }
-            int co = tid;
-            for(int ci_block = 0; ci_block < Ci_blocks; ci_block++) {
-                // naive again for now...
-                int ci_block_start = ci_block << 5;
-                // int ci_block_end = ci_block_start + (1<<5);
-                int local_ci = tid;
-                int local_ci32 = local_ci << 5;
-                int global_ci = ci_block_start + tid;
-                int global_ci32 = global_ci << 5;
-                if(global_ci < Ci) {
-                    for(int co = 0; co < 32; co++) {
-                        // just copy directly, ignore latency hiding for now
-                        U_[local_ci32 + co] = U[xinu * xinu_U_stride + global_ci32 + co];
+    for(int gn = 0; gn < GN; gn++) { // loop stpuidly for now...
+        int gn32 = gn << 5;
+        for(int xi = 0; xi < 6; xi++) {
+            for(int nu=0; nu < 6; nu++) {
+                int xinu = xi * 6 + nu;
+                float sum_by_n[32];
+                for(int n = 0; n < 32; n++) {
+                    sum_by_n[n] = 0.0f;
+                }
+                int co = tid;
+                for(int ci_block = 0; ci_block < Ci_blocks; ci_block++) {
+                    // naive again for now...
+                    int ci_block_start = ci_block << 5;
+                    int local_ci = tid;
+                    int local_ci32 = local_ci << 5;
+                    int global_ci = ci_block_start + tid;
+                    int global_ci32 = global_ci << 5;
+                    if(global_ci < Ci) {
+                        for(int co = 0; co < 32; co++) {
+                            // just copy directly, ignore latency hiding for now
+                            U_[local_ci32 + co] = U[xinu * xinu_U_stride + global_ci32 + co];
+                        }
+                        for(int n = 0; n < 32; n++) {
+                            // just copy directly, ignore latency hiding for now
+                            V_[local_ci32 + n] = V[xinu * xinu_V_stride + gn * tiles * tiles * Ci * 32 + tiles_offset + global_ci32 + n];
+                        }
+                        // no need to sync threads, since workgroup size == warpsize, ie 32 (TODO: AMD)
+                        
+                        // each thread handles ... hmmm...we'd better have 1024 threads (on NVIDIA), or 256 anyway (works also on AMD)
+                        // anyway, for now, each thread handles one value of co, all values of n block, and all values of ci
+                        // two loops
                     }
-                    for(int n = 0; n < 32; n++) {
-                        // just copy directly, ignore latency hiding for now
-                        V_[local_ci32 + n] = V[tiles_offset + xinu * xinu_V_stride + global_ci32 + n];
+                    for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
+                       float sum = 0.0f;
+                       //int global_n = gn32 + n;
+                       #pragma unroll
+                       for(int ci = 0; ci < 32; ci++) {
+                          int global_ci = ci_block_start + ci;  // this is so inefficient...
+                          int ci32 = ci << 5;
+                          float value = global_ci < Ci ? U_[ci32 + co] * V_[ci32 + n] : 0.0f;
+                          sum += value;
+                       }
+                       sum_by_n[n] += sum;
                     }
-                    // no need to sync threads, since workgroup size == warpsize, ie 32 (TODO: AMD)
-                    
-                    // each thread handles ... hmmm...we'd better have 1024 threads (on NVIDIA), or 256 anyway (works also on AMD)
-                    // anyway, for now, each thread handles one value of co, all values of n block, and all values of ci
-                    // two loops
                 }
                 for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
-                   float sum = 0.0f;
-                   #pragma unroll
-                   for(int ci = 0; ci < 32; ci++) {
-                      int global_ci = ci_block_start + ci;  // this is so inefficient...
-                      int ci32 = ci << 5;
-                      float value = global_ci < Ci ? U_[ci32 + co] * V_[ci32 + n] : 0.0f;
-                      sum += value;
-                   }
-                   sum_by_n[n] += sum;
+                   // [n//32][n % 32][co // 32][co % 32][th][tw][xi][nu]
+                   int offset = (gn32 + n) * 1 * 32 * tiles * tiles * 6 * 6 + // (n // 32) * 32 + (n % 32)
+                                0 + //  (co // 32)
+                                co * tiles * tiles * 6 * 6 + // (co % 32)
+                                b * 6 * 6 +   // b
+                                xinu +   // xinu
+                                0.0f;
+                   M[offset] = sum_by_n[n];
                 }
-            }
-            for(int n=0; n < 32; n++) {  // obvioulsy these hould be variables and stuff, in later version
-               int offset = 0 +  // (n // 32)
-                            n * 1 * 32 * tiles * tiles * 6 * 6 + // (n % 32)
-                            0 + //  (co // 32)
-                            co * tiles * tiles * 6 * 6 + // (co % 32)
-                            b * 6 * 6 +   // b
-                            xinu +   // xinu
-                            0;
-               M[offset] = sum_by_n[n];
             }
         }
     }
@@ -461,9 +464,9 @@ kernel void calcM(global float *restrict M, const global float *restrict U, cons
         int Ci, int GCi, int tiles, int GN,
         local float *U_, local float *V_
     ) {
-    int gk = get_group_id(0);
-    int gn = get_group_id(1);
-    int th_tw = get_group_id(2);
+    //int gk = get_group_id(0);
+    //int gn = get_group_id(1);
+    //int th_tw = get_group_id(2);
     
     int b = get_group_id(0);
 
