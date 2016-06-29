@@ -300,22 +300,6 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     
     print(M_from_cl.reshape(M_from_cl.size)[:20])
     
-    print(M_from_cpu[0,0,0,0])
-    print(M_from_cl[0,0,0,0])
-    print('')
-
-    print(M_from_cpu[0,1,0,0])
-    print(M_from_cl[0,1,0,0])
-    print('')
-    
-    print(M_from_cpu[0,63,0,0])
-    print(M_from_cl[0,63,0,0])
-    print('')
-    
-    print(M_from_cpu[1,0,0,0])
-    print(M_from_cl[1,0,0,0])
-    print('')
-    
     assert np.allclose(M_from_cl, M_from_cpu, atol=1e-2)
     
     #np.transpose(V_from_cl, [2, 6, 4, 5, 3, 0, 1])
@@ -330,17 +314,17 @@ def simple1():
     #Co = 4
  
     # {'padW': 1, 'kH': 3, 'iH': 56, 'iW': 56, 'padH': 1, 'kW': 3, 'Ci': 256, 'Co': 256, 'dW': 1, 'dH': 1}
-    image_size = 12
+    image_size = 56
     N = 64
-    Ci = 64
-    Co = 64
+    Ci = 32
+    Co = 32
 
-    start = time.time()
-    for it in range(5):
-        res = process(iH=image_size, iW=image_size, N=N, Ci=Ci,
-            Co=Co)
-    end = time.time()
-    print('diff', end - start)
+    #start = time.time()
+    #for it in range(5):
+    res = process(iH=image_size, iW=image_size, N=N, Ci=Ci,
+        Co=Co)
+    #end = time.time()
+    #print('diff', end - start)
     O = res['O']
     I = res['I']
     W = res['W']
@@ -353,7 +337,9 @@ def simple1():
         w = random.randint(0, image_size - 1)
         cpuvalue = cpu_check.checkO(W=W, I=I, O=O, c=co, h=h, w=w, n=n)
         diff = abs(O[co, h, w, n] - cpuvalue)
-        print('co', co, 'h', h, 'w', w, 'n', n, O[co, h, w, n], cpuvalue, 'diff', diff)
+        if diff >= 1e-3:
+            print('co', co, 'h', h, 'w', w, 'n', n, O[co, h, w, n], cpuvalue, 'diff', diff)
+            assert False
         assert diff < 1e-3
 
 np.set_printoptions(precision=2, suppress=True)
