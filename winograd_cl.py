@@ -156,7 +156,7 @@ def calcM(N, Co, M_cl, U_shape, U_cl, V_shape, V_cl):
     print('GK', GK, 'GN', GN, 'tiles', tiles, 'Co', Co, 'Ci', Ci, 'N', N)
 
     grid = (tiles * tiles,1,1) # b
-    block = (32, 32, 1)
+    block = (32, 16, 1)  # 16 for intel...
 
     call_cl_kernel(
         k_calcM,

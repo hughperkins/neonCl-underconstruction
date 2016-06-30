@@ -401,7 +401,8 @@ void process_ci_block(
             for(int xi = 0; xi < 6; xi++) {
                 for(int nu=0; nu < 6; nu++) {
                     int xinu = xi * 6 + nu;
-                    float sum = 0.0f;
+                    float sum0 = 0.0f;
+                    float sum1 = 0.0f;
                     for(int ci_block = 0; ci_block < Ci_blocks; ci_block++) {
                         int ci_block_start = ci_block << 5;
                         int local_ci = tid;
@@ -413,10 +414,12 @@ void process_ci_block(
                             {
                                 int local_co = tid1;
                                 U_[local_ci32 + local_co] = U[xinu * xinu_U_stride + gk * Ci * 32 + global_ci32 + local_co];
+                                U_[local_ci32 + local_co + 16] = U[xinu * xinu_U_stride + gk * Ci * 32 + global_ci32 + local_co + 16];
                             }
                             {
                                 int n = tid1;
                                 V_[local_ci32 + n] = V[xinu * xinu_V_stride + gn * tiles * tiles * Ci * 32 + tiles_offset + global_ci32 + n];
+                                V_[local_ci32 + n + 16] = V[xinu * xinu_V_stride + gn * tiles * tiles * Ci * 32 + tiles_offset + global_ci32 + n + 16];
                             }
                         }
                         barrier(CLK_LOCAL_MEM_FENCE);
@@ -428,7 +431,15 @@ void process_ci_block(
                               int global_ci = ci_block_start + ci;
                               int ci32 = ci << 5;
                               float value = global_ci < Ci ? U_[ci32 + local_co] * V_[ci32 + n] : 0.0f;
-                              sum += value;
+                              sum0 += value;
+                           }
+                          n = tid1 + 16;
+                           #pragma unroll
+                           for(int ci = 0; ci < 32; ci++) {
+                              int global_ci = ci_block_start + ci;
+                              int ci32 = ci << 5;
+                              float value = global_ci < Ci ? U_[ci32 + local_co] * V_[ci32 + n] : 0.0f;
+                              sum1 += value;
                            }
                         }
                     }
@@ -440,7 +451,15 @@ void process_ci_block(
                                     b * 6 * 6 +   // b
                                     xinu   // xinu
                                     ;
-                       M[offset] = sum;
+                       M[offset] = sum0;
+
+                       n = tid1 + 16;
+                       offset = (gn32 + n) * GK * 32 * tiles * tiles * 6 * 6 + // (n // 32) * 32 + (n % 32)
+                                    (gk32 + local_co) * tiles * tiles * 6 * 6 + // (co % 32)
+                                    b * 6 * 6 +   // b
+                                    xinu   // xinu
+                                    ;
+                       M[offset] = sum1;
                     }
                 }
             }

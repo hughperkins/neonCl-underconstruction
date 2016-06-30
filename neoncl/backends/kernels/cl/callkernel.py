@@ -3,6 +3,7 @@ import numpy as np
 
 
 def call_cl_kernel(kernel, queue, grid, block, *args):
+    print('grid', grid, 'block', block, 'kernel', kernel)
     blockDim = len(block)
     if blockDim == 3:
         globalSize = (block[0] * grid[0], block[1] * grid[1], block[2] * grid[2])  # hacky? what do you mean? :-P
