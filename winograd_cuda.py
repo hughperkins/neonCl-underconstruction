@@ -23,22 +23,24 @@ import numpy as np
 import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
+import winograd_kernels_cuda
 from neoncl.util.math_helper import get_div_mul_shift_32, get_div_mul_shift_64, ceil_div
 import winograd_cpu
 import cpu_check
+from pycuda import gpuarray
+from pycuda.driver import Context
 from timecheck import inittime, timecheck
+from cu_callkernel import call_cu_kernel
 
 
-gpu_idx = 0
+# gpu_idx = 0
 
-k_calcU = winograd_kernels_cu.calcU(ctx)
-k_calcV = winograd_kernels_cu.calcV(ctx)
-k_calcM = winograd_kernels_cu.calcM(ctx)
-k_calcO = winograd_kernels_cu.calcO(ctx)
+k_calcU = winograd_kernels_cuda.calcU()
+k_calcV = winograd_kernels_cuda.calcV()
+k_calcM = winograd_kernels_cuda.calcM()
+k_calcO = winograd_kernels_cuda.calcO()
 
 its = 1
-
-mf = cl.mem_flags
 
 def printTensor(t):
    dims = len(t.shape)
@@ -52,7 +54,7 @@ def printTensor(t):
                line += '%.1f ' % t[i][x][y]
             print(line)
 
-def calcU(q, W_shape, W_cu, U_cu):
+def calcU(W_shape, W_cu, U_cu):
     Ci = W_shape[0]
     kH = W_shape[1]
     kW = W_shape[2]
@@ -67,11 +69,11 @@ def calcU(q, W_shape, W_cu, U_cu):
     
     call_cu_kernel(
         k_calcU,
-        q, grid, block,
+        grid, block,
         U_cu, W_cu,
         kH * kW * Co, kW * Co, kW * Co * 2, Co, Ci * 1152,
         Ci, GK)
-    q.finish()
+    Context.synchronize()
     timecheck('calced U_cu')
 
 def calcV(I_shape, I_cu, V_cu):
@@ -124,7 +126,7 @@ def calcV(I_shape, I_cu, V_cu):
 
     call_cu_kernel(
         k_calcV,
-        q, grid, block,
+        grid, block,
         V_cu, I_cu,
         
         iH, iW, N, padH, padW,
@@ -132,7 +134,7 @@ def calcV(I_shape, I_cu, V_cu):
         shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
         iH * iW * N, iW * N, GYS*GXS*Ci*1152, GXS * Ci * 1152, Ci * 1152,
         GXS, GXS * GYS, GN, Ci)
-    q.finish()
+    Context.synchronize()
     timecheck('calced V_cu')
 
 def calcM(N, Co, M_cu, U_shape, U_cu, V_shape, V_cu):
@@ -148,12 +150,12 @@ def calcM(N, Co, M_cu, U_shape, U_cu, V_shape, V_cu):
 
     call_cu_kernel(
         k_calcM,
-        q, grid, block,
+        grid, block,
         M_cu, U_cu, V_cu,
         
-        Ci, 1, tiles, GN, GK,
-        cl.LocalMemory(32 * 32 * 4), cl.LocalMemory(32 * 32 * 4))
-    q.finish()
+        Ci, 1, tiles, GN, GK) #,
+        # cl.LocalMemory(32 * 32 * 4), cl.LocalMemory(32 * 32 * 4))
+    Context.synchronize()
     timecheck('calced M_cu')
 
     # new layouts:
@@ -175,11 +177,11 @@ def calcO(O_cu, M_shape, M_cu):
 
     call_cu_kernel(
         k_calcO,
-        q, grid, block,
+        grid, block,
         O_cu, M_cu,
         num_xinu_tiles
     )
-    q.finish()
+    Context.synchronize()
     timecheck('calced O_cu')
 
 def process(iH, iW, N, Ci, Co, kH=3, kW=3):
@@ -232,24 +234,25 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     O = np.zeros((GN, 32, GK, 32, tiles, tiles, 4, 4,), dtype=np.float32)
     O_cu = gpuarray.to_gpu(O)
 
-    q.finish()
+    Context.synchronize()
     print('allocated buffers')
     start = time.time()
 
     for it in range(3):
-        calcU(q=q, U_cu=U_cu, W_shape=W.shape, W_cu=W_cu)
+        calcU(U_cu=U_cu, W_shape=W.shape, W_cu=W_cu)
         calcV(V_cu=V_cu, I_shape=I.shape, I_cu=I_cu)
         calcM(N=N, Co=Co, M_cu=M_cu, U_shape=U.shape, U_cu=U_cu, V_shape=V.shape, V_cu=V_cu)
 
         calcO(O_cu=O_cu, M_shape=M.shape, M_cu=M_cu)
 
-        q.finish()
+        Context.synchronize()
         end = time.time()
         print('calcs done')
         print('time for all calcs:', end - start)
         start = time.time()
 
-    cl.enqueue_copy(q, O, O_cu)
+    O = O_cu.get()
+    # cl.enqueue_copy(q, O, O_cu)
 
     O = O.transpose(2,3, 4,6, 5,7, 0,1).reshape(
         GK * 32, tiles * 4, tiles * 4, GN * 32)
@@ -283,7 +286,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     M_from_cpu = winograd_cpu.calcM(U=U_from_cu, V=V_from_cu, N=N, Co=Co)
     M_from_cu = np.copy(M)
     cl.enqueue_copy(q, M_from_cu, M_cu)
-    q.finish()
+    Context.synchronize()
     M_from_cu = M_from_cu.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6)[:N, :Co]
     
     print(M_from_cu.reshape(M_from_cu.size)[:20])

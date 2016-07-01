@@ -20,21 +20,26 @@
 import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
+import os
+from os import path
 
 
-def calcU(ctx):
+if not path.isdir('/tmp/cudaptx'):
+    os.makedirs('/tmp/cudaptx')
+
+def calcU():
     print('calcU')
     code = r"""
-kernel void calcU(
-    global float* Out, global const float* In,
+__global__ void calcU(
+    float* Out, const float* In,
     int RSK, int SK, int SK2, int K, int C1152, int C, int GK)
 {
-    int tid  = get_local_id(0);
+    int tid  = threadIdx.x;
     //if(tid != 0) {
     //  return;
     //}
-    int blkK = get_num_groups(0) - get_group_id(0) - 1;
-    int c    = get_num_groups(1) - get_group_id(1) - 1;
+    int blkK = gridDim.x - blockIdx.x - 1;
+    int c    = gridDim.y - blockIdx.y - 1;
     int k    = (blkK<<5) + tid;
 
     // output before:
@@ -94,7 +99,7 @@ kernel void calcU(
     // output in new order:
     // [xi][nu][Co//32][Ci][Co % 32]
 
-    // we can probably make these kernel parameters
+    // we can probably make these __global__ parameters
     int nu_stride = 32 * C * GK;
     int xi_stride = nu_stride * 6;
     //int nu_stride = 0;
@@ -135,7 +140,7 @@ kernel void calcU(
     module = SourceModule(code, keep=True, cache_dir='/tmp/cudaptx')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
     return module.get_function('calcU')
 
-def calcV(ctx):
+def calcV():
     print('calcV')
 
     code = r"""
@@ -151,20 +156,20 @@ static inline int div64(int value, int div_mul, int div_shift)
     return result;
 }
 
-kernel void calcV(
-    global float* Out, global const float* In,
+__global__ void calcV(
+    float* Out, const float* In,
     int Y, int X, int N, int pad_y, int pad_x,
     int GXS, int GYS2, int GXS2, int magic_GXS2, int shift_GXS2, int magic_GXS, int shift_GXS,
     int shlY, int shlX, int maskY, int shrY, int maskX, int shrX, int shlN, int maskN,
     int YXN, int XN, int GYS_GXS_C_1152, int GXS_C_1152, int C_1152,
     int GX, int GY_GX, int GN, int C)
 {
-    int tid   = get_local_id(0);
-    int blkN  = get_num_groups(0) - get_group_id(0) - 1;
-    int blkYX = get_num_groups(1) - get_group_id(1) - 1;
-    int c     = get_num_groups(2) - get_group_id(2) - 1;
+    int tid   = threadIdx.x;
+    int blkN  = gridDim.x - blockIdx.x - 1;
+    int blkYX = gridDim.y - blockIdx.y - 1;
+    int c     = gridDim.z - blockIdx.z - 1;
 
-    // unpack y,x from get_group_id(0)
+    // unpack y,x from blockIdx.x
     int gy2 = (blkYX * magic_GXS) >> shift_GXS;
     int gx2 = blkYX - gy2*GXS;
     
@@ -274,20 +279,20 @@ kernel void calcV(
 
         //Out[out_offset + i * xi_stride + 0 * nu_stride] = 123.45f;
     }
-    //Out[0] = get_num_groups(1);
-    //Out[get_group_id(1) + 1] = (float)gy;
-    //Out[get_group_id(1) + 10] = (float)gx;
-    //if(get_local_id(0) == 0) {
-    //    Out[get_group_id(2)] = get_group_id(2);
+    //Out[0] = gridDim.y;
+    //Out[blockIdx.y + 1] = (float)gy;
+    //Out[blockIdx.y + 10] = (float)gx;
+    //if(threadIdx.x == 0) {
+    //    Out[blockIdx.z] = blockIdx.z;
     //}
 }
 """
     module = SourceModule(code, keep=True, cache_dir='/tmp/cudaptx')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
     return module.get_function('calcV')
 
-def calcM_blocked_l2(ctx):
+def calcM_blocked_l2():
     code = r"""
-    kernel void calcM_blocked_l2(global float *R, const global float *U, const global float *V,
+    __global__ void calcM_blocked_l2(float *R, const float *U, const float *V,
         int A, int B
         ) {
         // just do really naive for now, improve later...
@@ -302,7 +307,7 @@ def calcM_blocked_l2(ctx):
         // lets do output value first ,since easiest, thne pull down the data
         
 
-        int b = get_local_id(0);
+        int b = threadIdx.x;
         float sum = 0;
         int A_blocks = A >> 5; // assume A is multipel of 32
         for(int a_block = 0; a_block < A; a_block+= 32) {
@@ -319,82 +324,18 @@ def calcM_blocked_l2(ctx):
     module = SourceModule(code, keep=True, cache_dir='/tmp/cudaptx')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
     return module.get_function('calcM_blocked_l2')
 
-def calcM(ctx):
+def calcM():
     # grid:  (GK, GN, th_tw)
     # block: (32, 1, 1)   # each thread used for different Ci value
     code = r"""
-void process_ci_block_too_complicated_do_simple_for_now(
-    global float *restrict M, global float *restrict U, global float *restrict V,
-        int Ci, int gci, int gk, int gn, int th_tw) {
+__device__ void process_ci_block(
+    float *M, const float *U, const float *V,
+        int Ci, int tiles, int GN, int GK, int b) {
 
-    // each workgroup handles:
-    // 32 values for Co
-    // some values for Ci (up to 512?)
-    // pull down in blocks of 32 * 4 = 128 floats at a time
-    // assume that only hav eup to Ci == 128 for now (add an extra loop later)
-    local float4 U4_[32 * 32];
-    local float4 V4_[32];
-    // int numVRounds = Ci >> (5+2);  // +2 is because we are going to use float4s
-    int tid = get_local_id(0);
-
-    int localCi = Ci - (gci << 128);
-
-    int V_offset = 0; // TODO
-    float4 V_value = V[V_offset + tid];
-    int U_offset = tid;
-    global float4 *restrict U4 = (global float4 *)U;
-    for(int i = 0; i < 8; i+= 1) {
-        // there are: 128 * 32 = 4096 floats
-        // or: 32 * 32 = 1024 float4's
-        // divided by 32 threads, 32 float4's per thread
-        // or 128 floats per thread
-        // each loop the 32 threads get 128 float4's, or 512 floats
-        // after 8 runs through the loop, it has fetchs 1024 float4's
-        int U_offset0 = U_offset + 0;
-        int U_offset1 = U_offset + 32;
-        int U_offset2 = U_offset + 64;
-        int U_offset3 = U_offset + 96;
-
-        float4 b0 = U_offset0 < localCi ? U4[U_offset0] : 0.0f;
-        float4 b1 = U_offset0 < localCi ? U4[U_offset1] : 0.0f;
-        float4 b2 = U_offset0 < localCi ? U4[U_offset2] : 0.0f;
-        float4 b3 = U_offset0 < localCi ? U4[U_offset3] : 0.0f;
-
-        U4_[U_offset0] = b0;
-        U4_[U_offset1] = b1;
-        U4_[U_offset2] = b2;
-        U4_[U_offset3] = b3;
-
-        U_offset += 128;
-    }
-    V4_[tid] = V_value;
-    // no need to sync, since workgroup is 32 threads, equals warpsize (whether this is a good
-    // idea, I'm not sure, but worth a shot...)
-
-    // now, all data should have been loaded
-    // each thread will sum across all values of ci, for one particular value of co
-
-    local float * restrict U_ = (local float * restrict)U4_;
-    local float * restrict V_ = (local float * restrict)V4_;
-
-    float sum = 0;
-    for(int ci = 0; ci < Ci; ci += 4) {
-        //float s0 = U_[(ci << 5) + tid] * V_
-        
-        //s0 += s1;
-        //s2 += s3;
-        //sum = s0 + s2;
-    }
-
-}
-
-void process_ci_block(
-    global float *restrict M, global float *restrict U, global float *restrict V,
-        int Ci, int tiles, int GN, int GK, int b,
-        local float *U_, local float *V_) {
-
-    int tid1 = get_local_id(1);
-    int tid = get_local_id(0);
+    __shared__ float U_[32*32];
+    __shared__ float V_[32*32];
+    int tid1 = threadIdx.x;
+    int tid = threadIdx.x;
     int xinu_U_stride = GK * Ci * 32;
     int xinu_V_stride = GN * tiles * tiles * Ci * 32;
     int Ci_blocks = (Ci + 31) >> 5;
@@ -414,7 +355,7 @@ void process_ci_block(
                         int local_ci32 = local_ci << 5;
                         int global_ci = ci_block_start + tid;
                         int global_ci32 = global_ci << 5;
-                        barrier(CLK_LOCAL_MEM_FENCE);
+                        __syncthreads();
                         if(global_ci < Ci) {
                             {
                                 int local_co = tid1;
@@ -427,7 +368,7 @@ void process_ci_block(
                                 V_[local_ci32 + n + 16] = V[xinu * xinu_V_stride + gn * tiles * tiles * Ci * 32 + tiles_offset + global_ci32 + n + 16];
                             }
                         }
-                        barrier(CLK_LOCAL_MEM_FENCE);
+                        __syncthreads();
                         int local_co = tid;
                         {
                           int n = tid1;
@@ -473,33 +414,35 @@ void process_ci_block(
 }
 
 // [n // 32][n % 32][co // 32][co % 32][th][tw][xi][nu]
-kernel void calcM(global float *restrict M, const global float *restrict U, const global float *restrict V,
-        int Ci, int GCi, int tiles, int GN, int GK,
-        local float *U_, local float *V_
+__global__ void calcM(float *M, const float *U, const float *V,
+        int Ci, int GCi, int tiles, int GN, int GK
     ) {
 
-    int b = get_group_id(0);
-    int tid1 = get_local_id(1);
+    int b = blockIdx.x;
+    //int tid1 = threadIdx.x;
 
    // if(tid1 == 0) {  // experiment to see if this affects the time
-        process_ci_block(M, U, V, Ci, tiles, GN, GK, b, U_, V_);
+        process_ci_block(M, U, V, Ci, tiles, GN, GK, b);
     //}
 }
     """
+    with open('/tmp/cudaptx/out.cu', 'w') as f:
+        f.write(code)
+    
     module = SourceModule(code, keep=True, cache_dir='/tmp/cudaptx')  # -cl-mad-enable -cl-fast-relaxed-math -cl-no-signed-zeros
     return module.get_function('calcM')
 
-def calcO(ctx):
+def calcO():
     # grid:  (GK, GN, th_tw)
     # block: (32, 1, 1)   # each thread used for different Ci value
     code = r"""
-kernel void calcO(
-    global float *O, global float *M, int GID) {
+__global__ void calcO(
+    float *O, float *M, int GID) {
     // lets just do stupidly for now, improve later...
     // assume block (32,1,1)
     // for calcU, each thread does one entire tile (6x6)  Let's do the same thing
     // let's just have a linear grid for now, to keep it simple stupid, then improve it later
-    int gid = get_global_id(0);
+    int gid = (blockIdx.x * blockDim.x + threadIdx.x);
     if(gid >= GID) {
         return;
     }
@@ -522,7 +465,7 @@ kernel void calcO(
         Otmp[3][i] =          + M_[1][i] - M_[2][i] + 8.0f * M_[3][i] - 8.0f * M_[4][i] + M_[5][i];
     }
 
-    global float *restrict O_ = O + gid * 4 * 4;
+    float *O_ = O + gid * 4 * 4;
     for(int i = 0; i < 4; i++) {
         int i4 = (i << 2);
         O_[i4 + 0] = Otmp[i][0] + Otmp[i][1] + Otmp[i][2] + Otmp[i][3] + Otmp[i][4];
