@@ -334,7 +334,7 @@ __device__ void process_ci_block(
 
     __shared__ float U_[32*32];
     __shared__ float V_[32*32];
-    int tid1 = threadIdx.x;
+    int tid1 = threadIdx.y;
     int tid = threadIdx.x;
     int xinu_U_stride = GK * Ci * 32;
     int xinu_V_stride = GN * tiles * tiles * Ci * 32;

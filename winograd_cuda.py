@@ -285,7 +285,7 @@ def process(iH, iW, N, Ci, Co, kH=3, kW=3):
     # [n//32][n % 32][co // 32][co % 32][th][tw][xi][nu]
     M_from_cpu = winograd_cpu.calcM(U=U_from_cu, V=V_from_cu, N=N, Co=Co)
     M_from_cu = np.copy(M)
-    cl.enqueue_copy(q, M_from_cu, M_cu)
+    M_from_cu = M_cu.get()
     Context.synchronize()
     M_from_cu = M_from_cu.reshape(GN * 32, GK * 32, tiles, tiles, 6, 6)[:N, :Co]
     
