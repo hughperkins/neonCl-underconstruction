@@ -85,12 +85,14 @@ winograd geometry: F(4x4,3x3)
 Current timings on a 940M are:
 - calcU 0.23ms
 - calcV: 3.14ms
-- calcM: 97.16ms
+- calcM: 42.84ms
 - calcO: 4.50ms
+
+Total: 50.71ms
 
 By comparison, using the same geometry with direct convolution (not even the SASS winograd), takes someting like ~1ms, in total :-P
 
-Clearly there's a bunch of work to do :-P
+Clearly there's a bunch of work to do :-)
 
 #### Theoretical limits
 
