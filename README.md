@@ -128,7 +128,7 @@ time = (1.06e7+9.44e6)/14.40/1024/1024/1024 seconds
 Of which:
    incoming: 0.00069seconds = 0.69milliseconds
    outgoing: 0.00061seconds = 0.61milliseconds
-
+```
 maximum theoretical flops (assuming all inputs comes from off-chip, and output goes back to off-chip, during M calculation):
 ```
 gflops = 4.62e8 / 0.0013 / 1e9
