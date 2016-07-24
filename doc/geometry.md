@@ -47,17 +47,17 @@ calcM
   gmem: [gn][n%][gk][k%][th][tw][xi][nu]
 ========================================
 calcO:
- grid:          [gn |n% |gk |k% |th |tw]
+ grid:      [gn |n% |gk |k% |th |tw//32]
 ----------------------------------------
  in M
   loop:                         [xi][nu]
- block:                             [  ]
+ block:                             [32]
   gmem: [gn][n%][gk][k%][th][tw][xi][nu]
 ----------------------------------------
    out
   loop:                         [xi][nu]
- block:                        [][]
-  gmem: 
+ block:                             [32]
+  gmem: [gn][n%][gk][k%][th][tw][xi][nu]
 ```
 
 ## neonCl winograd properties, new2
