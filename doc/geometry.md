@@ -4,44 +4,48 @@
 
 ```
 calcU:
-   in:                 [ c][kh][kw][ k]
-  out:             [gk][ c][xi][nu][k%]
+   in:                  [ c][kh][kw][ k]
+  out:              [gk][ c][xi][nu][k%]
 calcV:
-   in:                 [ c][ h][ w][ n]
-  out:     [th][tw][gn][ c][xi][nu][n%]
+   in:                  [ c][ h][ w][ n]
+  out:      [th][tw][gn][ c][xi][nu][n%]
 ```
 
 ## neonCl winograd geometries, current
 
 ```
 calcU
-   in:                 [ c][kh][kw][ k]
- loop:                         [xi][nu]
- grid:                         [gk][ c]
-block:                             [k%]
-  out:             [xi][nu][gk][ c][k%]
-----------------------------------------
+   in:                  [ c][kh][kw][ k]
+ loop:                          [xi][nu]
+ grid:                          [gk][ c]
+block:                              [k%]
+ gmem:              [xi][nu][gk][ c][k%]
+========================================
 calcV
-   in:                 [ c][ h][ w][ n]
- loop:                         [xi][nu]
- grid:                 [gn][th |tw][ c]
-block:                             [n%]
-  out:     [xi][nu][gn][th][tw][ c][n%]
-----------------------------------------
+   in:                  [ c][ h][ w][ n]
+ loop:                          [xi][nu]
+ grid:                  [gn][th |tw][ c]
+block:                              [n%]
+ gmem:      [xi][nu][gn][th][tw][ c][n%]
+========================================
 calcM
   grid:                         [th |tw]
-
- Uloop:             [gn][gk][xi][nu][gc]
-Ublock:                         [c%][k%]
 ----------------------------------------
- Vloop:             [gn][gk][xi][nu][gc]
-Vblock:                         [c%][n%]
-
+  in U:
+  loop:             [gn][gk][xi][nu][gc]
+ block:                         [c%][k%]
+  gmem:             [xi][nu][gk][ c][k%]
+----------------------------------------
+  in V
+  loop:             [gn][gk][xi][nu][gc]
+ block:                         [c%][n%]
+  gmem:     [xi][nu][gn][th][tw][ c][n%]
+----------------------------------------
+   out
   loop:             [gn][gk][xi][nu][ c]
  block:                         [ c][n%]
-
-   out: [gn][n%][gk][k%][th][tw][xi][nu]
-----------------------------------------
+  gmem: [gn][n%][gk][k%][th][tw][xi][nu]
+========================================
 calcO:
 ```
 
